@@ -4,7 +4,7 @@ Version: `1`
 
 The `.bp.json` file is the shared contract between Canari, Canari Forensics,
 and BreakPoint. Every component reads and writes this format.
-The format is frozen after Phase 0. Treat it as a stable API.
+Treat it as a stable API.
 
 ## Full Schema
 
