@@ -25,5 +25,8 @@ htmlcov/
 # Vigil runtime data
 .vigil-data/
 
+# Local-only docs
+docs/phase-status.md
+
 # Editor
 .DS_Store
