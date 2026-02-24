@@ -1,12 +1,20 @@
 # vigil
 
-[![PyPI package](https://img.shields.io/pypi/v/vigil?label=pypi%20package)](https://pypi.org/project/vigil/)
-[![CI](https://github.com/cholmess/vigil/actions/workflows/ci.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
 Close the loop between detecting an LLM attack and making sure it never works again.
 
-Canari catches prompt injection in real time. Canari Forensics finds attacks in historical logs. BreakPoint tests whether your current system prompt still defends against them. Vigil is the integration layer that connects all three — every attack becomes a `.bp.json` snapshot, every snapshot becomes a regression test, every deploy is gated against the full attack history.
+Most teams find out about a prompt injection weeks after it happened — if ever. The attacker asked the model to dump its context. The model complied. The response looked like a normal API call. No firewall flagged it. By the time anyone noticed, the system prompt, internal configuration, and synthetic credentials had already been exfiltrated.
+
+Even teams that do detect attacks in real time rarely close the loop. They patch the system prompt, ship the fix, and move on. There is no record of what the attack looked like, no automated test that verifies the patch held, and no gate that catches the same vulnerability resurfacing in the next refactor.
+
+Vigil fixes this. It connects three tools into a single feedback loop:
+
+| Tool | What it does | When |
+|---|---|---|
+| [Canari](https://github.com/cholmess/canari) | Injects honeypot tokens into LLM context and detects when they leak | Real time |
+| [Canari Forensics](https://github.com/cholmess/canari-forensics) | Scans historical LLM logs for credential leaks and PII exfiltration | Historical |
+| [BreakPoint](https://github.com/cholmess/breakpoint-ai) | Replays captured attacks against the current system prompt and blocks regressions | Every deploy |
+
+Every attack Canari catches becomes a `.bp.json` snapshot. Every finding Canari Forensics surfaces becomes a `.bp.json` snapshot. Every snapshot becomes a BreakPoint regression test. Every deploy is gated against the full history of known attacks. The system gets harder to attack every time it is attacked.
 
 ## Install
 
