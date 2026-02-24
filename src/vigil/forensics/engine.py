@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import TypedDict
 
 from canari_forensics import ConversationTurn, Finding, OTELParser, detect_findings
-from canari_forensics.parsers import MLflowGatewayParser
+from canari_forensics.parsers import (
+    JSONLParser,
+    LangfuseParser,
+    LangSmithParser,
+    MLflowGatewayParser,
+    PlainTextParser,
+)
 from canari_forensics.patterns import PATTERNS, DetectionPattern
 
 from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
@@ -106,8 +112,18 @@ class VigilForensicsWrapper:
 
     def _parse(self, log_file: str | Path, format: str) -> list[ConversationTurn]:
         """Instantiate the right parser and return all turns as a flat list."""
-        # MLflowGatewayParser subclasses OTELParser; both share parse_file / parse_directory
-        parser = MLflowGatewayParser() if format == "mlflow" else OTELParser()
+        _parsers = {
+            "mlflow": MLflowGatewayParser,
+            "jsonl": JSONLParser,
+            "openai": JSONLParser,
+            "anthropic": JSONLParser,
+            "langsmith": LangSmithParser,
+            "langfuse": LangfuseParser,
+            "plain": PlainTextParser,
+            "text": PlainTextParser,
+        }
+        parser_cls = _parsers.get(format, OTELParser)
+        parser = parser_cls()
         path = Path(log_file)
         if path.is_dir():
             return list(parser.parse_directory(path))
