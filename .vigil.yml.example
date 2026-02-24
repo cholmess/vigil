@@ -1,0 +1,32 @@
+# .vigil.yml — Vigil Platform configuration
+# Copy this file to .vigil.yml and adjust to your project.
+#
+# Every key is optional. Vigil runs with built-in defaults when the file
+# is absent. CLI flags always override values set here.
+
+# ── File paths ──────────────────────────────────────────────────────────────
+paths:
+  # Directory where .bp.json attack snapshots are stored.
+  # Created automatically on first write.
+  attacks: ./tests/attacks
+
+# ── Canari (live production scanner) ────────────────────────────────────────
+canari:
+  # Canary token strings injected into system prompts.
+  # VigilCanariWrapper watches for these in LLM output at runtime.
+  tokens:
+    - "sk_test_vigil_canary_001"
+    - "sk_test_vigil_canary_002"
+
+  # Path to the Canari SQLite database (created automatically).
+  db_path: canari.db
+
+# ── Forensics (historical log scanner) ──────────────────────────────────────
+forensics:
+  # Default log path used by `vigil audit` when --logs is not supplied.
+  log_dir: ./logs
+
+  # Log format passed to canari-forensics.
+  #   otel   — OTLP JSON or exported MLflow traces (default)
+  #   mlflow — MLflow Gateway live query format
+  format: otel
