@@ -13,7 +13,11 @@ import typer
 
 from vigil.config import VigilConfig
 from vigil.forensics.engine import VigilForensicsWrapper
-from vigil.loop.library import community_attacks_dir, import_attacks, import_community_attacks, list_attacks
+from vigil.loop.library import (
+    import_attacks,
+    import_community_attacks,
+    list_attacks,
+)
 from vigil.loop.replayer import VigilBreakPointRunner
 
 # --------------------------------------------------------------------------- #

@@ -112,7 +112,7 @@ class VigilForensicsWrapper:
 
     def _parse(self, log_file: str | Path, format: str) -> list[ConversationTurn]:
         """Instantiate the right parser and return all turns as a flat list."""
-        _parsers = {
+        _parsers: dict[str, type] = {
             "mlflow": MLflowGatewayParser,
             "jsonl": JSONLParser,
             "openai": JSONLParser,

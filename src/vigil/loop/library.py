@@ -7,7 +7,6 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-
 _COMMUNITY_DIR = Path(__file__).parent.parent / "attacks"
 
 

@@ -6,7 +6,12 @@
 """
 
 from vigil.loop.exporter import VigilCanariWrapper
-from vigil.loop.library import community_attacks_dir, import_attacks, import_community_attacks, list_attacks
+from vigil.loop.library import (
+    community_attacks_dir,
+    import_attacks,
+    import_community_attacks,
+    list_attacks,
+)
 from vigil.loop.replayer import VigilBreakPointRunner
 
 __all__ = [

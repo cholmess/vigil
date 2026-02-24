@@ -12,10 +12,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "typer",
-    "ahocorasick-rs",
-    "canari-llm @ file://../canari",
-    "breakpoint-ai @ file://../breakpoint-ai",
-    "canari-forensics @ file://../canari-forensics",
+    "canari-llm>=0.1.2",
+    "breakpoint-ai>=0.2.1",
+    "canari-forensics>=0.1.5",
 ]
 keywords = ["llm", "safety", "canari", "breakpoint", "forensics"]
 classifiers = [
