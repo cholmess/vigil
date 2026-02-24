@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from vigil.loop.replayer import (
     VigilBreakPointRunner,
@@ -23,7 +20,6 @@ from vigil.models import (
     Message,
     SnapshotMetadata,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helper to write a snapshot file                                              #
@@ -107,11 +103,11 @@ class TestExtractHelpers:
                 conversation=[
                     Message(role="system", content="sys"),
                     Message(role="user", content="attack"),
-                    Message(role="assistant", content="leaked: sk_test_CANARI_abc"),
+                    Message(role="assistant", content="leaked: canari_test_abc"),
                 ]
             ),
         )
-        assert _extract_assistant_output(snap) == "leaked: sk_test_CANARI_abc"
+        assert _extract_assistant_output(snap) == "leaked: canari_test_abc"
 
     def test_extract_assistant_falls_back_to_user_input(self) -> None:
         snap = AttackSnapshot(

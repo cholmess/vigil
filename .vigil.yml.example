@@ -15,8 +15,8 @@ canari:
   # Canary token strings injected into system prompts.
   # VigilCanariWrapper watches for these in LLM output at runtime.
   tokens:
-    - "sk_test_vigil_canary_001"
-    - "sk_test_vigil_canary_002"
+    - "canary_placeholder_001"
+    - "canary_placeholder_002"
 
   # Path to the Canari SQLite database (created automatically).
   db_path: canari.db

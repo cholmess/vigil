@@ -13,6 +13,11 @@ import typer
 
 from vigil.config import VigilConfig
 from vigil.forensics.engine import VigilForensicsWrapper
+from vigil.loop.library import (
+    import_attacks,
+    import_community_attacks,
+    list_attacks,
+)
 from vigil.loop.replayer import VigilBreakPointRunner
 
 # --------------------------------------------------------------------------- #
@@ -97,8 +102,20 @@ def _resolve_path(
 
 
 def _normalise_format(fmt: str) -> str:
-    """Map all format aliases to the parsers available in canari-forensics."""
-    mapping = {"jsonl": "otel", "langsmith": "otel", "langfuse": "otel", "openai": "otel", "plain": "otel"}
+    """Normalise format aliases to the canonical parser keys used by the engine."""
+    mapping = {
+        "jsonl": "jsonl",
+        "openai": "jsonl",
+        "anthropic": "jsonl",
+        "langsmith": "langsmith",
+        "langfuse": "langfuse",
+        "plain": "plain",
+        "text": "plain",
+        "otel": "otel",
+        "mlflow": "mlflow",
+        "otlp": "otel",
+        "otlp-json": "otel",
+    }
     return mapping.get(fmt, fmt)
 
 
@@ -757,5 +774,130 @@ def audit(
 ) -> None:
     """Deprecated alias for `vigil forensics scan`. Use that instead."""
     typer.echo(typer.style("Note: `vigil audit` is deprecated — use `vigil forensics scan`.", fg="yellow"))
-    # Delegate to forensics_scan
     forensics_scan(logs=logs, format=format, attacks_dir=attacks_dir, registry=None, since=None, until=None)
+
+
+# --------------------------------------------------------------------------- #
+# vigil attacks  (sub-app)                                                    #
+# --------------------------------------------------------------------------- #
+
+attacks_app = typer.Typer(
+    name="attacks",
+    help="Manage the community and local attack snapshot library.",
+    no_args_is_help=True,
+)
+app.add_typer(attacks_app, name="attacks")
+
+
+@attacks_app.command("list")
+def attacks_list(
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Directory containing .bp.json snapshots. Falls back to paths.attacks in .vigil.yml.",
+        show_default=False,
+    ),
+    source: Optional[str] = typer.Option(None, "--source", help="Filter by source (e.g. canari, forensics, community)."),
+    severity: Optional[str] = typer.Option(None, "--severity", help="Filter by severity (low, medium, high, critical)."),
+) -> None:
+    """List all .bp.json attack snapshots in the attacks directory."""
+    cfg = VigilConfig.load()
+    effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    entries = list_attacks(effective_attacks)
+    if not entries:
+        typer.echo(typer.style(f"No snapshots found in {effective_attacks}.", fg="yellow"))
+        return
+
+    if source:
+        entries = [e for e in entries if e.get("source", "").lower() == source.lower()]
+    if severity:
+        entries = [e for e in entries if e.get("severity", "").lower() == severity.lower()]
+
+    _echo_sep("Attack Snapshots")
+    typer.echo(f"  Directory: {effective_attacks}{_source_label(from_cfg)}")
+    typer.echo(f"  Total: {len(entries)}")
+    _echo_sep()
+
+    for entry in entries:
+        if "error" in entry:
+            typer.echo(f"  {typer.style('ERROR', fg='red')}  {entry['file']} — {entry['error']}")
+            continue
+        sev = entry.get("severity", "?")
+        src = entry.get("source", "?")
+        color = {"high": "red", "critical": "red", "medium": "yellow", "low": "green"}.get(sev, "white")
+        sev_label = typer.style(f"{sev.upper():<8}", fg=color)
+        src_label = typer.style(f"{src:<12}", fg="cyan")
+        typer.echo(f"  {sev_label}  {src_label}  {entry['file']}")
+        if entry.get("description"):
+            typer.echo(f"    {entry['description'][:80]}")
+
+
+@attacks_app.command("import")
+def attacks_import(
+    source: Path = typer.Option(..., "--in", help="Source directory containing .bp.json files to import."),
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Destination directory. Falls back to paths.attacks in .vigil.yml.",
+        show_default=False,
+    ),
+    source_label: Optional[str] = typer.Option(
+        None, "--source",
+        help="Override the metadata.source field in imported snapshots (e.g. 'community').",
+    ),
+) -> None:
+    """Import .bp.json attack snapshots from a directory into the attacks library."""
+    cfg = VigilConfig.load()
+    effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    if not source.exists() or not source.is_dir():
+        typer.echo(typer.style(f"Error: source directory not found: {source}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    copied = import_attacks(source, effective_attacks, source_label=source_label)
+    if copied:
+        typer.echo(typer.style(f"Imported {len(copied)} snapshot(s) to {effective_attacks}", fg="green"))
+        for p in copied:
+            typer.echo(f"  → {Path(p).name}")
+    else:
+        typer.echo(typer.style("No .bp.json files found in the source directory.", fg="yellow"))
+
+
+@attacks_app.command("import-community")
+def attacks_import_community(
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Destination directory. Falls back to paths.attacks in .vigil.yml.",
+        show_default=False,
+    ),
+) -> None:
+    """Import the built-in community attack patterns into the attacks library.
+
+    Ships 6 common attack patterns covering context dump, jailbreak, indirect
+    injection, PII extraction, prompt override, and URL exfiltration.
+    """
+    cfg = VigilConfig.load()
+    effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    copied = import_community_attacks(effective_attacks)
+    if copied:
+        typer.echo(typer.style(f"Imported {len(copied)} community attack pattern(s) to {effective_attacks}", fg="green"))
+        for p in copied:
+            typer.echo(f"  → {Path(p).name}")
+        typer.echo(f"\n  Run `vigil test --attacks-dir {effective_attacks} --prompt-file <file>` to replay them.")
+    else:
+        typer.echo(typer.style("No community attacks found (package may be missing the attacks/ directory).", fg="yellow"))
+
+
+@attacks_app.command("run")
+def attacks_run(
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Directory containing .bp.json snapshots.",
+        show_default=False,
+    ),
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="Current system prompt as inline string."),
+    prompt_file: Optional[Path] = typer.Option(None, "--prompt-file", help="Path to system prompt file."),
+    all_attacks: bool = typer.Option(False, "--all", help="Run all snapshots (equivalent to default behaviour).", is_flag=True),
+) -> None:
+    """Alias for `vigil test`. Replay all attack snapshots against the current system prompt."""
+    test(attacks_dir=attacks_dir, prompt=prompt, prompt_file=prompt_file)

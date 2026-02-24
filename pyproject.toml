@@ -12,10 +12,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "typer",
-    "ahocorasick-rs",
-    "canari-llm @ file://../canari",
-    "breakpoint-ai @ file://../breakpoint-ai",
-    "canari-forensics @ file://../canari-forensics",
+    "canari-llm>=0.1.2",
+    "breakpoint-ai>=0.2.1",
+    "canari-forensics>=0.1.6",
 ]
 keywords = ["llm", "safety", "canari", "breakpoint", "forensics"]
 classifiers = [
@@ -35,10 +34,21 @@ vigil = "vigil.cli:app"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "ruff>=0.3",
 ]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"vigil.attacks" = ["*.bp.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

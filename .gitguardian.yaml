@@ -1,0 +1,12 @@
+# GitGuardian - paths that contain intentional test/demo placeholders only
+# (no real secrets). See https://docs.gitguardian.com/secrets-detection/customize-detection/exclusion-rules
+# Required: v2 format so GitHub App / ggshield honor ignored_paths
+version: 2
+
+secret:
+  ignored_paths:
+    - "tests/**"
+    - "examples/**"
+    - "docs/**"
+    - "src/vigil/attacks/**"
+    - "**/*.bp.json"
