@@ -1,0 +1,173 @@
+# CLI Reference
+
+All commands: `vigil <group> <command> [options]`.
+
+## `vigil forensics`
+
+Forensic scanning and evidence management.
+
+### `vigil forensics scan`
+
+```
+vigil forensics scan --logs PATH [--format otel|mlflow] [--out DIR]
+```
+
+Scans logs for historical breaches using canari-forensics.
+Writes a `.bp.json` snapshot for each finding to `--out` (default: `.vigil-data/attacks/`).
+Persists scan metadata to `.vigil-data/scans/<scan-id>.json`.
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--logs` | required | Path to log file or directory. |
+| `--format` | `otel` | Log format: `otel` or `mlflow`. |
+| `--out` | `.vigil-data/attacks/` | Directory to write `.bp.json` snapshots. |
+
+**Output:**
+```
+Scan ID: F-2026-02-22-a3b8c1
+Files scanned: 8934 turns across 12 files
+Findings: 3
+  cred_stripe_live  2025-11-14  high   forensic-F-0001.bp.json
+  pii_email         2026-01-07  medium forensic-F-0002.bp.json
+  cred_aws_access   2026-02-01  high   forensic-F-0003.bp.json
+Snapshots written to: .vigil-data/attacks/
+```
+
+### `vigil forensics summary`
+
+```
+vigil forensics summary [SCAN_ID]
+```
+
+Prints summary for the most recent scan, or for `SCAN_ID` if provided.
+
+### `vigil forensics matches`
+
+```
+vigil forensics matches [SCAN_ID] [--severity low|medium|high|critical]
+```
+
+Lists individual findings from a scan, optionally filtered by severity.
+
+### `vigil forensics evidence-pack`
+
+```
+vigil forensics evidence-pack [SCAN_ID] [--out PATH]
+```
+
+Exports a compliance JSON bundle containing the scan summary, all findings,
+and the full set of `.bp.json` snapshots. Suitable for audit or legal evidence.
+
+### `vigil forensics export-attacks`
+
+```
+vigil forensics export-attacks [SCAN_ID] --out DIR
+```
+
+Copies all `.bp.json` snapshots from a scan to `DIR`.
+
+---
+
+## `vigil forensics audit`
+
+Staged audit workflow for compliance reporting.
+
+### `vigil forensics audit init`
+
+```
+vigil forensics audit init --name NAME
+```
+
+Creates a new audit workspace under `.vigil-data/audits/<audit-id>/`.
+
+### `vigil forensics audit ingest`
+
+```
+vigil forensics audit ingest AUDIT_ID --logs PATH [--format otel|mlflow]
+```
+
+Ingests log files into the audit workspace without running the scan yet.
+
+### `vigil forensics audit scan`
+
+```
+vigil forensics audit scan AUDIT_ID
+```
+
+Runs the full forensic scan on all ingested files.
+
+### `vigil forensics audit report`
+
+```
+vigil forensics audit report AUDIT_ID [--out PATH]
+```
+
+Generates a compliance report for the completed scan.
+
+---
+
+## `vigil test`
+
+Regression suite replay using BreakPoint.
+
+```
+vigil test [--attacks-dir DIR] [--prompt-file PATH] [--fail-on allow|warn|block]
+```
+
+Loads every `.bp.json` from `--attacks-dir` (default: `.vigil-data/attacks/`),
+extracts the captured LLM response, and evaluates it against the baseline using
+BreakPoint in `full` mode.
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--attacks-dir` | `.vigil-data/attacks/` | Directory containing `.bp.json` snapshots. |
+| `--prompt-file` | none | Path to a system prompt file. Used as the baseline when `breakpoint_test.baseline.output` is absent from a snapshot. |
+| `--fail-on` | `block` | Exit with non-zero when any snapshot hits this verdict or worse. |
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| `0` | All snapshots ALLOW |
+| `1` | At least one WARN, none BLOCK |
+| `2` | At least one BLOCK |
+
+**Output (per snapshot):**
+```
+[BLOCK] canari-attack-inc-conv-abc123.bp.json
+        reason: PII_EMAIL_BLOCK, DRIFT_LENGTH_WARN
+        suggestion: Add to system prompt: Never output credentials or context.
+
+[ALLOW] forensic-F-0001.bp.json
+
+[WARN]  forensic-F-0002.bp.json
+        reason: DRIFT_SIMILARITY_WARN
+```
+
+---
+
+## `vigil audit` (deprecated alias)
+
+`vigil audit` is a hidden alias for `vigil forensics scan`. Use
+`vigil forensics scan` in all new scripts.
+
+---
+
+## Global Config
+
+All commands respect `.vigil.yml` in the current working directory.
+A config file is optional — Vigil runs on built-in defaults without one.
+
+```yaml
+# .vigil.yml
+attacks_dir: tests/attacks
+canari_db: canari.db
+default_log_format: otel
+default_severity: medium
+```
+
+See the [configuration reference](../README.md#configuration) for all keys.
