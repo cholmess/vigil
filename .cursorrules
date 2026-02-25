@@ -1,36 +1,56 @@
 # VIGIL PLATFORM - ARCHITECTURE RULES
 
 ## Project Identity
-You are building `vigil`, a Python-based LLM Production Safety Platform.
-Vigil is an INTEGRATION LAYER. It orchestrates three components:
-1. `canari-llm` (Production attack detection) - EXTERNAL DEPENDENCY
-2. `breakpoint-ai` (Pre-production regression testing) - EXTERNAL DEPENDENCY
-3. `forensics` (Historical log scanning) - BUILT INTO VIGIL
+You are building `vigil`, a self-contained Python LLM Production Safety Platform.
+Vigil bundles three modules — do NOT import from separate packages for these:
+1. `vigil.canari`     — live attack detection (Canari runtime IDS)
+2. `vigil.breakpoint` — regression testing / CI gate (BreakPoint policy suite)
+3. `vigil.forensics`  — historical log scanning (pattern library + parsers)
+
+The integration layer is `vigil.loop` (exporter, replayer, library).
+The shared data contract is `vigil.models` (AttackSnapshot, .bp.json).
 
 ## Strict Boundaries
-- DO NOT rewrite prompt injection detection logic. Use `canari-llm`.
-- DO NOT rewrite LLM testing logic. Use `breakpoint-ai`.
-- Vigil's ONLY job is to route data using the `.bp.json` file format.
+- DO NOT import from `canari`, `canari_forensics`, or `breakpoint` packages directly.
+  Use the internal modules: `vigil.canari`, `vigil.forensics`, `vigil.breakpoint`.
+- DO NOT rewrite detection or evaluation logic — it lives in the modules above.
+- Vigil's loop job is to route data through the `.bp.json` file format.
 
-## EXTERNAL API CONTRACTS (DO NOT HALLUCINATE)
+## INTERNAL API CONTRACTS (DO NOT HALLUCINATE)
 
-### 1. Canari (GitHub: cholmess/canari)
-- **Import:** `from canari import init` (or `from canari import CanariClient`; client is created via `init(db_path="...")`).
-- **Initialization:** `client = init(db_path="canari.db")`; then `canaries = client.generate(n_tokens=1)` to get canary tokens.
-- **Injection:** `secure_prompt = client.inject_system_prompt(system_prompt, canaries)` (position optional, e.g. `position="end"`).
-- **Scanning:** `events = client.scan_output(llm_output, context=...)` (returns a list of `AlertEvent`).
-- **Return Object:** `events` is a list of `AlertEvent`. Breach when `len(events) > 0`. Detected token values: `[e.canary_value for e in events]`. Each `AlertEvent` has `canary_value`, `severity`, `canary_id`, etc.
+### 1. vigil.canari  (live detection)
+- **Import:** `from vigil.canari import CanariClient, init`
+- **Initialization:** `client = init(db_path="canari.db")`; then `canaries = client.generate(n_tokens=1)`.
+- **Injection:** `secure_prompt = client.inject_system_prompt(system_prompt, canaries)`.
+- **Scanning:** `events = client.scan_output(llm_output, context=...)` — returns list of `AlertEvent`.
+- **AlertEvent fields:** `canary_value`, `severity`, `canary_id`, `token_type`, `injection_strategy`.
 
-### 2. BreakPoint (GitHub: cholmess/breakpoint-ai)
-- **Import:** `from breakpoint import evaluate` (function from `breakpoint.engine.evaluator`; re-exported on package).
-- **Initialization:** No suite class; call the `evaluate` function directly with baseline and candidate (e.g. dicts or `.bp.json`-shaped payloads).
-- **Testing:** `decision = evaluate(baseline=baseline_dict, candidate=candidate_dict, ...)` (also supports `baseline_output`/`candidate_output`, `strict`, `mode`, `config_path`, etc.).
-- **Return Object:** `decision` is a `Decision` dataclass with: `decision.status` (e.g. `"ALLOW"`, `"WARN"`, `"BLOCK"`), `decision.reason_codes` (list of strings, e.g. `"PII_EMAIL_BLOCK"`, `"COST_INCREASE_BLOCK"`), and `decision.reasons`, `decision.metrics`, `decision.details`.
+### 2. vigil.breakpoint  (CI gate)
+- **Import:** `from vigil.breakpoint import evaluate`
+- **Usage:** `decision = evaluate(baseline={"output": "..."}, candidate={"output": "..."}, mode="full")`
+  Also accepts `baseline_output`/`candidate_output`, `strict`, `config_path`, `accepted_risks`.
+- **Decision fields:** `decision.status` (`"ALLOW"` | `"WARN"` | `"BLOCK"`),
+  `decision.reason_codes` (e.g. `["PII_EMAIL_BLOCK"]`), `decision.reasons`, `decision.metrics`.
 
-### 3. Canari Forensics (GitHub: cholmess/canari-forensics)
+### 3. vigil.forensics  (historical scanning)
 - **Two-step API: parse log files → detect findings.**
-- **Imports:** `from canari_forensics import OTELParser, detect_findings, Finding, ConversationTurn`; for patterns: `from canari_forensics.patterns import PATTERNS, DetectionPattern, load_pattern_pack`.
-- **Step 1 — Parse:** `parser = OTELParser()` (also `MLflowGatewayParser` for MLflow Gateway format). Parse a single file: `turns = list(parser.parse_file(log_file_path))`. Parse a whole directory: `turns = list(parser.parse_directory(log_dir_path))`. Each call yields `ConversationTurn` objects.
-- **ConversationTurn fields:** `conversation_id`, `turn_index`, `role` (e.g. `"system"`, `"user"`, `"assistant"`), `content`, `timestamp`, `metadata`, `source_format`. Use `role` to reconstruct system_prompt / user_input / ai_output from the turns list.
-- **Step 2 — Detect:** `findings = detect_findings(turns, patterns=PATTERNS)`. Pass a custom list of `DetectionPattern` objects to override the defaults. Built-in patterns are in `PATTERNS`; load custom ones with `load_pattern_pack(path)`.
-- **Return Object:** `findings` is a list of `Finding`. Each `Finding` has: `finding_id`, `severity` (e.g. `"CRITICAL"`, `"HIGH"`), `kind` (e.g. `"real_credential_leak"`, `"probable_prompt_injection"`), `pattern_id`, `pattern_name`, `confidence`, `trace_id`, `timestamp`, `matched_value` (redacted), `context` (surrounding snippet), `action` (recommended remediation string).
+- **Imports:** `from vigil.forensics.parsers import OTELParser, JSONLParser, MLflowGatewayParser`
+  `from vigil.forensics.scanner.engine import ForensicScanner`
+  `from vigil.forensics.patterns import PATTERNS`
+  `from vigil.forensics.models import ConversationTurn, Finding`
+- **Step 1 — Parse:** `parser = OTELParser()` (also `JSONLParser`, `MLflowGatewayParser`, etc.)
+  `turns = list(parser.parse_file(log_file_path))` — yields `ConversationTurn` objects.
+- **ConversationTurn fields:** `conversation_id`, `turn_index`, `role`, `content`, `timestamp`,
+  `metadata`, `source_format`.
+- **Step 2 — Detect:** `scanner = ForensicScanner(patterns=PATTERNS)`
+  `findings = scanner.detect_findings(turns)` — returns list of `Finding`.
+- **Finding fields:** `finding_id`, `severity`, `kind`, `pattern_id`, `pattern_name`,
+  `confidence`, `matched_value` (redacted), `context`, `action`.
+
+### 4. vigil.loop  (integration layer)
+- **Exporter:** `from vigil.loop.exporter import VigilCanariWrapper`
+  `wrapper.process_turn(system_prompt, user_input, llm_output, attacks_dir, application)`
+  Returns `Path` to saved `.bp.json` on breach, else `None`.
+- **Replayer:** `from vigil.loop.replayer import VigilBreakPointRunner`
+  `runner.run_regression_suite(attacks_dir, current_system_prompt)` — returns `RegressionSummary`.
+- **Library:** `from vigil.loop.library import import_community_attacks, list_attacks`
