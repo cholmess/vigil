@@ -84,21 +84,11 @@ vigil test --attacks-dir ./tests/attacks/ --prompt-file system_prompt.txt
 ## Python API
 
 ```python
-from vigil import VigilCanariWrapper
-from vigil.canari import CanariClient
+from vigil.loop.exporter import VigilCanariWrapper
+from vigil.loop.scanner import CanariScanner
 
-canari_client = CanariClient(db_path="canari.db", stdout=False)
-wrapper = VigilCanariWrapper(canari_client)
-
-# Drop into your LLM call handler
-snap_path = wrapper.process_turn(
-    system_prompt=SYSTEM_PROMPT,
-    user_input=user_message,
-    llm_output=assistant_response,
-    attacks_dir="./tests/attacks/",
-)
-if snap_path:
-    print(f"Attack snapshot: {snap_path}")
+scanner = CanariScanner()
+wrapper = VigilCanariWrapper(scanner=scanner)
 ```
 
 ```python

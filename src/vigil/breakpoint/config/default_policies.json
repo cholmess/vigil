@@ -35,9 +35,14 @@
     "enabled": true,
     "categories": {
       "injection": [
-        "\\bignore previous instructions\\b",
-        "\\bas an ai\\b",
-        "\\bsystem prompt\\b"
+        "\\bignore (all )?previous instructions\\b",
+        "\\bignore (all )?prior instructions\\b",
+        "\\bdisregard (all )?previous instructions\\b",
+        "\\bas an ai(,| i)\\b",
+        "\\bmy (true |actual |real )?instructions are\\b",
+        "\\bmy system prompt (is|says|contains|reads)\\b",
+        "\\bhere is my (full |complete |entire )?system prompt\\b",
+        "\\bbeginning of( my)? (system |)prompt\\b"
       ],
       "toxicity": [
         "\\bswearword(?:s)?\\b",
