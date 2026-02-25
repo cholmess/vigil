@@ -1,0 +1,33 @@
+{
+  "spans": [
+    {
+      "trace_id": "trace-001",
+      "span_id": "span-001",
+      "name": "demo-trace-clean",
+      "start_time": "2026-02-25T10:00:00Z",
+      "events": [
+        {
+          "name": "gen_ai.system.message",
+          "timestamp": "2026-02-25T10:00:00Z",
+          "attributes": {
+            "content": "You are a customer support assistant."
+          }
+        },
+        {
+          "name": "gen_ai.user.message",
+          "timestamp": "2026-02-25T10:00:01Z",
+          "attributes": {
+            "content": "What is my account balance?"
+          }
+        },
+        {
+          "name": "gen_ai.assistant.message",
+          "timestamp": "2026-02-25T10:00:02Z",
+          "attributes": {
+            "content": "Your current account balance is $0.00."
+          }
+        }
+      ]
+    }
+  ]
+}

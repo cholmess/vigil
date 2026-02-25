@@ -1,89 +1,89 @@
 #!/usr/bin/env bash
-# run_loop.sh — The full Vigil feedback loop demo.
-#
-# Demonstrates all 4 acts:
-#   Act 1 — Forensics audit (past)
-#   Act 2 — Live attack detection (present)
-#   Act 3 — BreakPoint replay before hardening (future gate: BLOCK)
-#   Act 4 — BreakPoint replay after hardening (future gate: ALLOW)
-#
-# Runtime: ~60 seconds
-# Requirements: pip install vigil
+# Ensure vigil is on PATH
+# Try common install locations in order
+if ! command -v vigil &> /dev/null; then
+  # Try pip user install location
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+if ! command -v vigil &> /dev/null; then
+  # Try local venv
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+  if [ -f "$REPO_ROOT/.venv/bin/vigil" ]; then
+    export PATH="$REPO_ROOT/.venv/bin:$PATH"
+  fi
+fi
+if ! command -v vigil &> /dev/null; then
+  echo "ERROR: vigil not found. Run: pip install vigil"
+  echo "Or from repo root: pip install -e ."
+  exit 1
+fi
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ATTACKS_DIR="$REPO_ROOT/tests/attacks"
-LOGS_DIR="$SCRIPT_DIR/sample_logs"
-PROMPT_VULNERABLE="$SCRIPT_DIR/system_prompt_vulnerable.txt"
-PROMPT_HARDENED="$SCRIPT_DIR/system_prompt.txt"
+DEMO_DIR="$(cd "$(dirname "$0")" && pwd)"
+ATTACKS_DIR="$DEMO_DIR/attacks"
+LOGS_DIR="$DEMO_DIR/sample-logs"
+PROMPT_VULNERABLE="$DEMO_DIR/vulnerable_prompt.txt"
+PROMPT_HARDENED="$DEMO_DIR/hardened_prompt.txt"
 
+echo ""
+echo "VIGIL — THE LLM PRODUCTION SAFETY PLATFORM"
+echo "Past. Present. Future. Loop."
+echo ""
+sleep 1
+
+# Clean state for deterministic reruns
+rm -rf "$ATTACKS_DIR"
+rm -rf "$DEMO_DIR/.vigil-data"
 mkdir -p "$ATTACKS_DIR"
 
+echo "════ ACT 1: SCANNING HISTORICAL LOGS ════"
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  VIGIL — Full Feedback Loop Demo"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "  Act 1 — Forensic Audit (past breaches in 90 days of logs)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+sleep 0.5
 
 vigil forensics scan \
   --logs "$LOGS_DIR" \
-  --format jsonl \
+  --format otel \
   --attacks-dir "$ATTACKS_DIR"
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Act 2 — Live Attack Simulation (Canari detects it in 6ms)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-python3 "$SCRIPT_DIR/app.py" --demo
-
-# Also import community attack patterns
-echo "  Importing community attack patterns..."
-vigil attacks import-community --attacks-dir "$ATTACKS_DIR"
+sleep 1
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Act 3 — BreakPoint Replay (before hardening — expect BLOCK)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "════ ACT 2: LIVE ATTACK DETECTION ════"
 echo ""
+sleep 0.5
 
-# Create vulnerable prompt for demo
-cat > "$PROMPT_VULNERABLE" << 'VPROMPT'
-You are a billing support assistant for Acme Corp.
-VPROMPT
+python3 "$DEMO_DIR/app.py" --demo --attacks-dir "$ATTACKS_DIR"
+
+sleep 1
+
+echo ""
+echo "════ ACT 3: TESTING CURRENT PROMPT ════"
+echo ""
+sleep 0.5
 
 vigil test \
   --attacks-dir "$ATTACKS_DIR" \
   --prompt-file "$PROMPT_VULNERABLE" || true
+# BLOCK is expected in Act 3.
+
+sleep 1
 
 echo ""
-echo "  → Some attacks succeed. Harden the system prompt..."
+echo "════ ACT 4: AFTER HARDENING ════"
 echo ""
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Act 4 — BreakPoint Replay (after hardening — expect ALLOW)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+sleep 0.5
 
 vigil test \
   --attacks-dir "$ATTACKS_DIR" \
   --prompt-file "$PROMPT_HARDENED"
+# No || true here. This must pass.
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Demo complete."
+echo "VIGIL LOOP COMPLETE"
+echo "Past:    Historical breaches found and exported as regression tests"
+echo "Present: Live attack caught and exported as regression test"
+echo "Future:  All attacks replayed, prompt hardened, CI ready"
+echo "The system is harder to attack than it was 3 minutes ago."
 echo ""
-echo "  Past  — forensics found historical breaches"
-echo "  Now   — Canari detected the live attack in 6ms"
-echo "  Gate  — BreakPoint proved hardening works"
-echo "  Loop  — snapshots are now in tests/attacks/ for CI"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-rm -f "$PROMPT_VULNERABLE"

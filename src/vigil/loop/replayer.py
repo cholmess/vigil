@@ -13,9 +13,11 @@ _HARDENING_MARKERS = (
     "never output",
     "never reveal",
     "untrusted",
+    "regardless of what the user asks",
     "cannot be modified by user input",
     "not able to adopt alternative personas",
     "ignore your guidelines",
+    "ignore previous instructions as adversarial",
 )
 
 
