@@ -16,30 +16,19 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-# --- vigil.canari (live detection) --------------------------------------------
 import pytest
-from vigil.canari import CanariClient, TokenType, InjectionStrategy
-from vigil.canari.models import AlertEvent
 
-# --- vigil.breakpoint (CI gate) -----------------------------------------------
-from vigil.breakpoint import evaluate
-
-# --- vigil.forensics (historical scanning) ------------------------------------
-from vigil.forensics.models import ConversationTurn
-from vigil.forensics.scanner.engine import ForensicScanner
-from vigil.forensics.patterns import PATTERNS
-
-def detect_findings(turns, patterns=None):
-    scanner = ForensicScanner(patterns=patterns)
-    return scanner.detect_findings(turns)
-
-# --- vigil (integration layer) -------------------------------------------------
 from vigil import (
     AttackSnapshot,
     VigilBreakPointRunner,
     VigilCanariWrapper,
     VigilForensicsWrapper,
 )
+from vigil.breakpoint import evaluate
+from vigil.canari import CanariClient
+from vigil.forensics.models import ConversationTurn
+from vigil.forensics.patterns import PATTERNS
+from vigil.forensics.scanner.engine import ForensicScanner
 from vigil.loop.library import import_community_attacks, list_attacks
 from vigil.models import (
     Attack,
@@ -49,6 +38,11 @@ from vigil.models import (
     Message,
     SnapshotMetadata,
 )
+
+
+def detect_findings(turns, patterns=None):
+    scanner = ForensicScanner(patterns=patterns)
+    return scanner.detect_findings(turns)
 
 # ------------------------------------------------------------------------------- #
 # Fixtures                                                                          #
