@@ -89,6 +89,8 @@ from vigil.loop.scanner import CanariScanner
 
 scanner = CanariScanner()
 wrapper = VigilCanariWrapper(scanner=scanner)
+snap_path = wrapper.process_turn(system_prompt=SYSTEM_PROMPT, user_input=user_message, llm_output=assistant_response)
+if snap_path: print(f"Attack snapshot: {snap_path}")
 ```
 
 ```python
