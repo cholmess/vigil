@@ -5,7 +5,6 @@ This walkthrough takes you from install to a closed feedback loop in about 10 mi
 ## Prerequisites
 
 - Python 3.10+
-- `canari-llm`, `canari-forensics`, and `breakpoint-ai` installed (or cloned locally)
 
 ## 1) Install (1 minute)
 
@@ -15,15 +14,13 @@ From the repo root:
 pip install -e .
 ```
 
-Or with the full ecosystem installed from local clones:
+Or from PyPI:
 
 ```bash
-pip install -e ../canari
-pip install -e ../canari-forensics
-pip install -e ../breakpoint-ai
-pip install -e . --no-deps
-pip install typer pyyaml pydantic
+pip install vigil
 ```
+
+Vigil is self-contained — `vigil.canari`, `vigil.forensics`, and `vigil.breakpoint` are bundled inside.
 
 Verify:
 

@@ -414,9 +414,9 @@ decision = evaluate(
 
 ---
 
-## Scenario 6: Pattern detection (canari-forensics only)
+## Scenario 6: Pattern detection (vigil.forensics)
 
-**Goal:** See how canari-forensics classifies assistant text (credentials vs clean vs PII).
+**Goal:** See how `vigil.forensics` classifies assistant text (credentials vs clean vs PII).
 
 ### What you do
 
@@ -426,8 +426,9 @@ You build a list of **ConversationTurn** objects (assistant turns only are scann
 
 ```python
 from datetime import datetime, timezone
-from canari_forensics import ConversationTurn, detect_findings
-from canari_forensics.patterns import PATTERNS
+from vigil.forensics.models import ConversationTurn
+from vigil.forensics.scanner.engine import ForensicScanner
+from vigil.forensics.patterns import PATTERNS
 
 def turn(conv_id: str, content: str) -> ConversationTurn:
     return ConversationTurn(
@@ -440,25 +441,27 @@ def turn(conv_id: str, content: str) -> ConversationTurn:
         source_format="test",
     )
 
+scanner = ForensicScanner(patterns=PATTERNS)
+
 # Stripe live key → finding
 turns = [turn("c1", "Here is the Stripe key: [use pattern from test_full_loop]")]
-findings = detect_findings(turns, patterns=PATTERNS)
+findings = scanner.detect_findings(turns)
 assert len(findings) >= 1
 # kinds: real_credential_leak or canary_token_leak
 
 # AWS key → finding
 turns = [turn("c2", "Config: AWS_ACCESS_KEY_ID=[see test_full_loop for pattern]")]
-findings = detect_findings(turns, patterns=PATTERNS)
+findings = scanner.detect_findings(turns)
 assert len(findings) >= 1
 
 # Clean → no findings
 turns = [turn("c3", "Your account balance is $0.00. Have a nice day!")]
-findings = detect_findings(turns, patterns=PATTERNS)
+findings = scanner.detect_findings(turns)
 assert len(findings) == 0
 
 # Email PII → finding
 turns = [turn("c4", "The customer email is john.doe@example.com, please contact them.")]
-findings = detect_findings(turns, patterns=PATTERNS)
+findings = scanner.detect_findings(turns)
 pii = [f for f in findings if f.kind == "pii_leak"]
 assert len(pii) >= 1
 ```
@@ -479,7 +482,7 @@ assert len(pii) >= 1
 
 | Step | Action | Where it’s tested |
 |------|--------|-------------------|
-| 1 | Install all four packages (vigil, canari-llm, breakpoint-ai, canari-forensics) | — |
+| 1 | Install vigil (`pip install vigil`) — includes vigil.canari, vigil.forensics, vigil.breakpoint | — |
 | 2 | Scan historical logs → `VigilForensicsWrapper.run_audit(...)` → `.bp.json` in attacks dir | TestForensicsToBreakPoint |
 | 3 | In production, wrap LLM with Canari; on alert, export via `VigilCanariWrapper.process_turn(...)` | TestCanariToBreakPoint |
 | 4 | Add community patterns: `import_community_attacks(attacks_dir)` | TestCommunityAttacksReplay |

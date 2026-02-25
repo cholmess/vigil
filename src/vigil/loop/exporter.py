@@ -1,4 +1,4 @@
-"""Export attack snapshots when Canari detects a breach."""
+"""Export attack snapshots when the Vigil detection engine detects a breach."""
 
 from __future__ import annotations
 

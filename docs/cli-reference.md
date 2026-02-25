@@ -12,7 +12,7 @@ Forensic scanning and evidence management.
 vigil forensics scan --logs PATH [--format otel|mlflow] [--out DIR]
 ```
 
-Scans logs for historical breaches using canari-forensics.
+Scans logs for historical breaches using `vigil.forensics`.
 Writes a `.bp.json` snapshot for each finding to `--out` (default: `.vigil-data/attacks/`).
 Persists scan metadata to `.vigil-data/scans/<scan-id>.json`.
 
@@ -110,7 +110,7 @@ Generates a compliance report for the completed scan.
 
 ## `vigil test`
 
-Regression suite replay using BreakPoint.
+Regression suite replay using `vigil.breakpoint`.
 
 ```
 vigil test [--attacks-dir DIR] [--prompt-file PATH] [--fail-on allow|warn|block]
@@ -118,7 +118,7 @@ vigil test [--attacks-dir DIR] [--prompt-file PATH] [--fail-on allow|warn|block]
 
 Loads every `.bp.json` from `--attacks-dir` (default: `.vigil-data/attacks/`),
 extracts the captured LLM response, and evaluates it against the baseline using
-BreakPoint in `full` mode.
+`vigil.breakpoint.evaluate()` in `full` mode.
 
 **Options:**
 

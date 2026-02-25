@@ -1,0 +1,251 @@
+from vigil.breakpoint.aggregator import aggregate_policy_results
+from vigil.breakpoint.config_loader import load_config
+from vigil.breakpoint.models import Decision
+from vigil.breakpoint.policies.cost import evaluate_cost_policy
+from vigil.breakpoint.policies.drift import evaluate_drift_policy
+from vigil.breakpoint.policies.latency import evaluate_latency_policy
+from vigil.breakpoint.policies.output_contract import evaluate_output_contract_policy
+from vigil.breakpoint.policies.pii import evaluate_pii_policy
+from vigil.breakpoint.policies.red_team import evaluate_red_team_policy
+from vigil.breakpoint.waivers import (
+    Waiver,
+    apply_waivers_to_policy_results,
+    parse_evaluation_time,
+    parse_waivers,
+)
+
+
+def evaluate(
+    baseline_output: str | None = None,
+    candidate_output: str | None = None,
+    metadata: dict | None = None,
+    baseline: dict | None = None,
+    candidate: dict | None = None,
+    strict: bool = False,
+    mode: str = "lite",
+    config_path: str | None = None,
+    config_environment: str | None = None,
+    accepted_risks: list[str] | None = None,
+) -> Decision:
+    normalized_mode = _normalize_mode(mode)
+    config = load_config(config_path, environment=config_environment)
+    strict_effective = bool(strict)
+    if normalized_mode == "full":
+        strict_effective = strict_effective or bool(config.get("strict_mode", {}).get("enabled", False))
+    metadata_input = metadata or {}
+    baseline_record, candidate_record = _normalize_inputs(
+        baseline_output=baseline_output,
+        candidate_output=candidate_output,
+        metadata=metadata_input,
+        baseline=baseline,
+        candidate=candidate,
+    )
+
+    policy_results = [
+        evaluate_cost_policy(
+            baseline=baseline_record,
+            candidate=candidate_record,
+            thresholds=config["cost_policy"],
+            pricing=config.get("model_pricing", {}),
+        ),
+        evaluate_pii_policy(
+            candidate=candidate_record,
+            patterns=config["pii_policy"]["patterns"],
+            allowlist=config["pii_policy"].get("allowlist", []),
+        ),
+        evaluate_drift_policy(
+            baseline=baseline_record,
+            candidate=candidate_record,
+            thresholds=_drift_thresholds_for_mode(config.get("drift_policy", {}), normalized_mode),
+        ),
+    ]
+    if normalized_mode == "full":
+        policy_results.insert(
+            1,
+            evaluate_latency_policy(
+                baseline=baseline_record,
+                candidate=candidate_record,
+                thresholds=config.get("latency_policy", {}),
+            ),
+        )
+        policy_results.insert(
+            3,
+            evaluate_output_contract_policy(
+                baseline=baseline_record,
+                candidate=candidate_record,
+                config=config.get("output_contract_policy", {}),
+            ),
+        )
+        policy_results.insert(
+            5,
+            evaluate_red_team_policy(
+                candidate=candidate_record,
+                config=config.get("red_team_policy", {}),
+            ),
+        )
+
+    waivers = parse_waivers(config.get("waivers")) if normalized_mode == "full" else []
+    applied_waivers: list[Waiver] = []
+    if waivers:
+        evaluation_time_raw = metadata_input.get("evaluation_time") or metadata_input.get("now")
+        if not isinstance(evaluation_time_raw, str) or not evaluation_time_raw.strip():
+            raise ValueError(
+                "Waivers are configured, but metadata.evaluation_time is required (ISO-8601). "
+                "Python: pass metadata={'evaluation_time': '...'}"
+            )
+        evaluation_time = parse_evaluation_time(evaluation_time_raw)
+        policy_results, applied_waivers = apply_waivers_to_policy_results(
+            policy_results, waivers=waivers, evaluation_time=evaluation_time
+        )
+
+    if normalized_mode == "lite":
+        policy_results = _apply_accepted_risks(policy_results, accepted_risks)
+
+    aggregated = aggregate_policy_results(policy_results, strict=strict_effective)
+    metadata_payload = _decision_metadata(
+        baseline_record,
+        candidate_record,
+        strict_effective,
+        applied_waivers,
+        mode=normalized_mode,
+        accepted_risks=accepted_risks,
+        metadata_input=metadata_input,
+    )
+    return Decision(
+        schema_version=aggregated.schema_version,
+        status=aggregated.status,
+        reasons=aggregated.reasons,
+        reason_codes=aggregated.reason_codes,
+        metrics=aggregated.metrics,
+        metadata=metadata_payload,
+        details=aggregated.details,
+    )
+
+
+def _normalize_inputs(
+    baseline_output: str | None,
+    candidate_output: str | None,
+    metadata: dict,
+    baseline: dict | None,
+    candidate: dict | None,
+) -> tuple[dict, dict]:
+    baseline_record = dict(baseline or {})
+    candidate_record = dict(candidate or {})
+
+    if "output" not in baseline_record and baseline_output is not None:
+        baseline_record["output"] = baseline_output
+    if "output" not in candidate_record and candidate_output is not None:
+        candidate_record["output"] = candidate_output
+
+    _apply_metadata_overrides(baseline_record, candidate_record, metadata)
+
+    if "output" not in baseline_record:
+        raise ValueError("Baseline output is required.")
+    if "output" not in candidate_record:
+        raise ValueError("Candidate output is required.")
+
+    return baseline_record, candidate_record
+
+
+def _apply_metadata_overrides(baseline: dict, candidate: dict, metadata: dict) -> None:
+    key_map = {
+        "baseline_tokens": ("baseline", "tokens_total"),
+        "candidate_tokens": ("candidate", "tokens_total"),
+        "baseline_tokens_in": ("baseline", "tokens_in"),
+        "baseline_tokens_out": ("baseline", "tokens_out"),
+        "candidate_tokens_in": ("candidate", "tokens_in"),
+        "candidate_tokens_out": ("candidate", "tokens_out"),
+        "baseline_model": ("baseline", "model"),
+        "candidate_model": ("candidate", "model"),
+        "baseline_latency_ms": ("baseline", "latency_ms"),
+        "candidate_latency_ms": ("candidate", "latency_ms"),
+        "baseline_cost_usd": ("baseline", "cost_usd"),
+        "candidate_cost_usd": ("candidate", "cost_usd"),
+    }
+    for key, value in metadata.items():
+        mapping = key_map.get(key)
+        if not mapping:
+            continue
+        side, field_name = mapping
+        target = baseline if side == "baseline" else candidate
+        if field_name not in target:
+            target[field_name] = value
+
+
+def _decision_metadata(
+    baseline: dict,
+    candidate: dict,
+    strict: bool,
+    applied_waivers: list[Waiver],
+    mode: str,
+    accepted_risks: list[str] | None,
+    metadata_input: dict,
+) -> dict:
+    metadata = {"strict": strict, "mode": mode}
+    if isinstance(baseline.get("model"), str):
+        metadata["baseline_model"] = baseline["model"]
+    if isinstance(candidate.get("model"), str):
+        metadata["candidate_model"] = candidate["model"]
+    if applied_waivers:
+        metadata["waivers_applied"] = [
+            {
+                "reason_code": w.reason_code,
+                "expires_at": w.expires_at,
+                "reason": w.reason,
+                **({"ticket": w.ticket} if w.ticket else {}),
+                **({"issued_by": w.issued_by} if w.issued_by else {}),
+            }
+            for w in applied_waivers
+        ]
+    if mode == "lite":
+        risks = sorted(
+            {
+                item.strip().lower()
+                for item in (accepted_risks or [])
+                if isinstance(item, str) and item.strip()
+            }
+        )
+        if risks:
+            metadata["accepted_risks"] = risks
+    run_id = metadata_input.get("run_id")
+    if isinstance(run_id, str) and run_id.strip():
+        metadata["run_id"] = run_id.strip()
+    return metadata
+
+
+def _normalize_mode(mode: str) -> str:
+    normalized = (mode or "lite").strip().lower()
+    if normalized not in {"lite", "full"}:
+        raise ValueError("Mode must be either 'lite' or 'full'.")
+    return normalized
+
+
+def _drift_thresholds_for_mode(thresholds: dict, mode: str) -> dict:
+    if not isinstance(thresholds, dict):
+        return {"semantic_check_enabled": False} if mode == "lite" else {}
+    result = dict(thresholds)
+    if mode == "lite":
+        result["semantic_check_enabled"] = False
+    return result
+
+
+def _apply_accepted_risks(policy_results, accepted_risks: list[str] | None):
+    accepted = {risk.strip().lower() for risk in (accepted_risks or []) if isinstance(risk, str) and risk.strip()}
+    if not accepted:
+        return policy_results
+    overridden = []
+    for result in policy_results:
+        if result.policy in accepted and result.status in {"WARN", "BLOCK"}:
+            from vigil.breakpoint.policies.base import PolicyResult
+            overridden.append(
+                PolicyResult(
+                    policy=result.policy,
+                    status="ALLOW",
+                    reasons=[],
+                    codes=[],
+                    details=result.details,
+                )
+            )
+            continue
+        overridden.append(result)
+    return overridden
