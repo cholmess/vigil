@@ -6,15 +6,15 @@ Most teams find out about a prompt injection weeks after it happened — if ever
 
 Even teams that do detect attacks in real time rarely close the loop. They patch the system prompt, ship the fix, and move on. There is no record of what the attack looked like, no automated test that verifies the patch held, and no gate that catches the same vulnerability resurfacing in the next refactor.
 
-Vigil fixes this. It connects three tools into a single feedback loop:
+Vigil fixes this. It bundles three capabilities into a single feedback loop:
 
-| Tool | What it does | When |
+| Module | What it does | When |
 |---|---|---|
-| [Canari](https://github.com/cholmess/canari) | Injects honeypot tokens into LLM context and detects when they leak | Real time |
-| [Canari Forensics](https://github.com/cholmess/canari-forensics) | Scans historical LLM logs for credential leaks and PII exfiltration | Historical |
-| [BreakPoint](https://github.com/cholmess/breakpoint-ai) | Replays captured attacks against the current system prompt and blocks regressions | Every deploy |
+| `vigil.canari` | Injects honeypot tokens into LLM context and detects when they leak | Real time |
+| `vigil.forensics` | Scans historical LLM logs for credential leaks and PII exfiltration | Historical |
+| `vigil.breakpoint` | Replays captured attacks against the current system prompt and blocks regressions | Every deploy |
 
-Every attack Canari catches becomes a `.bp.json` snapshot. Every finding Canari Forensics surfaces becomes a `.bp.json` snapshot. Every snapshot becomes a BreakPoint regression test. Every deploy is gated against the full history of known attacks. The system gets harder to attack every time it is attacked.
+Every attack `vigil.canari` catches becomes a `.bp.json` snapshot. Every finding `vigil.forensics` surfaces becomes a `.bp.json` snapshot. Every snapshot becomes a `vigil.breakpoint` regression test. Every deploy is gated against the full history of known attacks. The system gets harder to attack every time it is attacked.
 
 ## Install
 
@@ -22,14 +22,10 @@ Every attack Canari catches becomes a `.bp.json` snapshot. Every finding Canari 
 pip install vigil
 ```
 
-Or from source with the full local ecosystem:
+Or from source:
 
 ```bash
-pip install -e ../canari
-pip install -e ../canari-forensics
-pip install -e ../breakpoint-ai
-pip install -e . --no-deps
-pip install typer pyyaml pydantic
+pip install -e .
 ```
 
 ## Quick start
@@ -124,7 +120,7 @@ if any(r.status == "BLOCK" for r in results):
 
 ## Docs
 
-- [Architecture](docs/architecture.md) — how the three tools connect
+- [Architecture](docs/architecture.md) — module structure and data flow
 - [The Feedback Loop](docs/loop.md) — the full loop explained
 - [Snapshot Format](docs/snapshot-format.md) — `.bp.json` field contract
 - [CLI Reference](docs/cli-reference.md) — all `vigil` commands

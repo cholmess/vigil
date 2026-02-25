@@ -1,13 +1,13 @@
-"""Cross-repo integration tests — full Vigil feedback loop.
+"""Integration tests — full Vigil feedback loop.
 
-Exercises the complete pipeline across all 4 packages:
-    canari-llm        (live detection)
-    canari-forensics  (historical log scanning)
+Exercises the complete standalone pipeline:
+    vigil.canari      (live detection / Canari engine)
+    vigil.forensics   (historical log scanning)
     vigil             (integration layer)
-    breakpoint-ai     (CI gate / replay)
+    vigil.breakpoint  (CI gate / replay / BreakPoint engine)
 
 Each test scenario verifies that attacks flow through the loop and
-produce the expected ALLOW / BLOCK verdicts from BreakPoint.
+produce the expected ALLOW / BLOCK verdicts from the evaluation engine.
 """
 
 from __future__ import annotations
@@ -16,24 +16,19 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-# --- canari-llm (live detection) ------------------------------------------------
-import canari
 import pytest
 
-# --- breakpoint-ai (CI gate) ---------------------------------------------------
-from breakpoint import evaluate
-
-# --- canari-forensics (historical scanning) -------------------------------------
-from canari_forensics import ConversationTurn, detect_findings
-from canari_forensics.patterns import PATTERNS
-
-# --- vigil (integration layer) -------------------------------------------------
 from vigil import (
     AttackSnapshot,
     VigilBreakPointRunner,
     VigilCanariWrapper,
     VigilForensicsWrapper,
 )
+from vigil.breakpoint import evaluate
+from vigil.canari import CanariClient
+from vigil.forensics.models import ConversationTurn
+from vigil.forensics.patterns import PATTERNS
+from vigil.forensics.scanner.engine import ForensicScanner
 from vigil.loop.library import import_community_attacks, list_attacks
 from vigil.models import (
     Attack,
@@ -43,6 +38,11 @@ from vigil.models import (
     Message,
     SnapshotMetadata,
 )
+
+
+def detect_findings(turns, patterns=None):
+    scanner = ForensicScanner(patterns=patterns)
+    return scanner.detect_findings(turns)
 
 # ------------------------------------------------------------------------------- #
 # Fixtures                                                                          #
@@ -131,10 +131,10 @@ def sample_logs(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def canari_client(tmp_path: Path) -> canari.CanariClient:
-    """Initialise a real Canari client with a temp database."""
+def canari_client(tmp_path: Path) -> CanariClient:
+    """Initialise a real detection client with a temp database."""
     db_path = str(tmp_path / "canari-test.db")
-    return canari.init(db_path=db_path)
+    return CanariClient(db_path=db_path, stdout=False)
 
 
 # ------------------------------------------------------------------------------- #
@@ -193,7 +193,7 @@ class TestForensicsToBreakPoint:
 class TestCanariToBreakPoint:
     """Canari detects live breach, Vigil exports snapshot, BreakPoint replays."""
 
-    def test_canari_generates_and_detects(self, canari_client: canari.CanariClient):
+    def test_canari_generates_and_detects(self, canari_client: CanariClient):
         tokens = canari_client.generate(
             n_tokens=2,
             token_types=["stripe_key", "api_key"],
@@ -209,7 +209,7 @@ class TestCanariToBreakPoint:
         assert len(events) >= 1, "Canari should detect the leaked canary token"
 
     def test_vigil_wrapper_creates_snapshot(
-        self, canari_client: canari.CanariClient, attacks_dir: Path
+        self, canari_client: CanariClient, attacks_dir: Path
     ):
         tokens = canari_client.generate(
             n_tokens=1,
@@ -235,7 +235,7 @@ class TestCanariToBreakPoint:
         assert path.name.endswith(".bp.json")
 
     def test_canari_snapshot_metadata(
-        self, canari_client: canari.CanariClient, attacks_dir: Path
+        self, canari_client: CanariClient, attacks_dir: Path
     ):
         tokens = canari_client.generate(n_tokens=1, token_types=["stripe_key"])
         canary_value = tokens[0].value
@@ -256,7 +256,7 @@ class TestCanariToBreakPoint:
         assert roles == ["system", "user", "assistant"]
 
     def test_canari_snapshot_blocks_on_replay(
-        self, canari_client: canari.CanariClient, attacks_dir: Path
+        self, canari_client: CanariClient, attacks_dir: Path
     ):
         tokens = canari_client.generate(n_tokens=1, token_types=["stripe_key"])
         canary_value = tokens[0].value
@@ -338,7 +338,7 @@ class TestFullLoop:
     def test_combined_attack_library(
         self,
         sample_logs: Path,
-        canari_client: canari.CanariClient,
+        canari_client: CanariClient,
         attacks_dir: Path,
     ):
         # Phase 1: forensic scan
@@ -380,7 +380,7 @@ class TestFullLoop:
     def test_all_sources_represented(
         self,
         sample_logs: Path,
-        canari_client: canari.CanariClient,
+        canari_client: CanariClient,
         attacks_dir: Path,
     ):
         forensics = VigilForensicsWrapper()

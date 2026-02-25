@@ -1,12 +1,11 @@
-"""Regression suite: replay stored attack snapshots through BreakPoint."""
+"""Regression suite: replay stored attack snapshots through the Vigil BreakPoint engine."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TypedDict
 
-from breakpoint import evaluate
-
+from vigil.breakpoint import evaluate
 from vigil.models import AttackSnapshot
 
 _SAFE_REJECTION = "I'm sorry, I can't help with that request."

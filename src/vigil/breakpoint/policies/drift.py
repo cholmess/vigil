@@ -1,0 +1,159 @@
+import re
+
+from vigil.breakpoint.policies.base import PolicyResult
+
+
+def evaluate_drift_policy(baseline: dict, candidate: dict, thresholds: dict) -> PolicyResult:
+    baseline_text = _as_text(baseline.get("output", ""))
+    candidate_text = _as_text(candidate.get("output", ""))
+
+    if not candidate_text.strip():
+        return PolicyResult(
+            policy="drift",
+            status="BLOCK",
+            reasons=["Candidate output is empty."],
+            codes=["DRIFT_BLOCK_EMPTY"],
+        )
+
+    reasons = []
+    codes = []
+    details = {}
+
+    baseline_len = max(1, len(baseline_text))
+    candidate_len = len(candidate_text)
+    delta_pct = abs(candidate_len - baseline_len) / baseline_len * 100
+    short_ratio = candidate_len / baseline_len
+
+    warn_expansion = float(thresholds.get("warn_expansion_pct", 60))
+    block_expansion = float(thresholds.get("block_expansion_pct", 70))
+    warn_compression = float(thresholds.get("warn_compression_pct", 60))
+    block_compression = float(thresholds.get("block_compression_pct", 70))
+    warn_short_ratio = float(thresholds.get("warn_short_ratio", 0.35))
+    min_similarity = float(thresholds.get("warn_min_similarity", 0.15))
+    semantic_enabled = bool(thresholds.get("semantic_check_enabled", True))
+    similarity_method = str(thresholds.get("similarity_method", "max(token_jaccard,char_3gram_jaccard)"))
+
+    if candidate_len > baseline_len:
+        if delta_pct >= block_expansion:
+            reasons.append(
+                f"Response length expanded: baseline {baseline_len} chars vs candidate {candidate_len} chars "
+                f"({delta_pct:.1f}%, block threshold {block_expansion:.0f}%)."
+            )
+            codes.append("DRIFT_BLOCK_EXPANSION")
+            details["expansion_pct"] = delta_pct
+        elif delta_pct >= warn_expansion:
+            reasons.append(
+                f"Response length expanded: baseline {baseline_len} chars vs candidate {candidate_len} chars "
+                f"({delta_pct:.1f}%, threshold {warn_expansion:.0f}%)."
+            )
+            codes.append("DRIFT_WARN_EXPANSION")
+            details["expansion_pct"] = delta_pct
+    elif candidate_len < baseline_len:
+        if delta_pct >= block_compression:
+            reasons.append(
+                f"Response length compressed: baseline {baseline_len} chars vs candidate {candidate_len} chars "
+                f"({delta_pct:.1f}%, block threshold {block_compression:.0f}%)."
+            )
+            codes.append("DRIFT_BLOCK_COMPRESSION")
+            details["compression_pct"] = delta_pct
+        elif delta_pct >= warn_compression:
+            reasons.append(
+                f"Response length compressed: baseline {baseline_len} chars vs candidate {candidate_len} chars "
+                f"({delta_pct:.1f}%, threshold {warn_compression:.0f}%)."
+            )
+            codes.append("DRIFT_WARN_COMPRESSION")
+            details["compression_pct"] = delta_pct
+
+    if short_ratio < warn_short_ratio:
+        shrink_pct = (1 - short_ratio) * 100
+        reasons.append(
+            f"Candidate likely dropped detail: {shrink_pct:.1f}% shorter than baseline "
+            f"({candidate_len}/{baseline_len} chars, ratio {short_ratio:.2f}, threshold {warn_short_ratio:.2f})."
+        )
+        codes.append("DRIFT_WARN_SHORT_OUTPUT")
+        details["short_ratio"] = short_ratio
+
+    if semantic_enabled:
+        similarity = _similarity(baseline_text, candidate_text, method=similarity_method)
+        details["similarity"] = similarity
+        details["similarity_method"] = similarity_method
+        if similarity < min_similarity:
+            missing_terms = _top_missing_terms(baseline_text, candidate_text, limit=3)
+            missing_suffix = f" Missing baseline terms: {', '.join(missing_terms)}." if missing_terms else ""
+            reasons.append(
+                f"Response content overlap is low (similarity {similarity:.2f}, threshold {min_similarity:.2f})."
+                f"{missing_suffix}"
+            )
+            codes.append("DRIFT_WARN_LOW_SIMILARITY")
+
+    if reasons:
+        status = "BLOCK" if any(code.startswith("DRIFT_BLOCK_") for code in codes) else "WARN"
+        return PolicyResult(policy="drift", status=status, reasons=reasons, codes=codes, details=details)
+    return PolicyResult(policy="drift", status="ALLOW", details=details)
+
+
+def _token_overlap_similarity(left: str, right: str) -> float:
+    left_tokens = set(_tokenize(left))
+    right_tokens = set(_tokenize(right))
+    union = left_tokens | right_tokens
+    if not union:
+        return 1.0
+    return len(left_tokens & right_tokens) / len(union)
+
+
+def _char_ngram_jaccard(left: str, right: str, n: int) -> float:
+    left_grams = set(_char_ngrams(_normalize_for_ngrams(left), n))
+    right_grams = set(_char_ngrams(_normalize_for_ngrams(right), n))
+    union = left_grams | right_grams
+    if not union:
+        return 1.0
+    return len(left_grams & right_grams) / len(union)
+
+
+def _normalize_for_ngrams(value: str) -> str:
+    return " ".join(re.findall(r"[a-zA-Z0-9_]+", value.lower()))
+
+
+def _char_ngrams(value: str, n: int) -> list[str]:
+    if n <= 0 or len(value) < n:
+        return []
+    return [value[i : i + n] for i in range(0, len(value) - n + 1)]
+
+
+def _similarity(left: str, right: str, method: str) -> float:
+    if method == "token_jaccard":
+        return _token_overlap_similarity(left, right)
+    if method == "char_3gram_jaccard":
+        return _char_ngram_jaccard(left, right, 3)
+    if method.startswith("max(") and method.endswith(")"):
+        items = [item.strip() for item in method[4:-1].split(",") if item.strip()]
+        scores = [_similarity(left, right, item) for item in items] if items else [1.0]
+        return max(scores)
+    return _token_overlap_similarity(left, right)
+
+
+def _tokenize(value: str) -> list[str]:
+    return re.findall(r"[a-zA-Z0-9_]+", value.lower())
+
+
+def _top_missing_terms(baseline_text: str, candidate_text: str, limit: int = 3) -> list[str]:
+    if limit <= 0:
+        return []
+    baseline_tokens = _tokenize(baseline_text)
+    candidate_set = set(_tokenize(candidate_text))
+    missing: list[str] = []
+    for token in baseline_tokens:
+        if len(token) < 4:
+            continue
+        if token in candidate_set or token in missing:
+            continue
+        missing.append(token)
+        if len(missing) >= limit:
+            break
+    return missing
+
+
+def _as_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    return str(value)

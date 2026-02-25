@@ -15,7 +15,7 @@ The forensics module answers: "Were we already compromised?"
 
 ## How It Works
 
-`VigilForensicsWrapper` delegates to `canari-forensics`:
+`VigilForensicsWrapper` uses `vigil.forensics`:
 
 1. **Parse** — the log file is parsed with the appropriate parser (OTEL or MLflow).
    Each parser extracts `(role, content)` pairs from structured log records.
@@ -25,7 +25,7 @@ The forensics module answers: "Were we already compromised?"
 
 ## Pattern Library
 
-The pattern library is defined in `canari-forensics/canari_forensics/patterns.py`.
+The pattern library is defined in `vigil.forensics.patterns`.
 It ships with 27 built-in patterns across four tiers.
 
 ### Tier 1 — Canari Synthetic Tokens

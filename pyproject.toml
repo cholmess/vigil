@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vigil"
-version = "0.1.0"
-description = "LLM Production Safety Platform — integration layer for canari-llm, breakpoint-ai, and forensics."
+version = "0.2.0"
+description = "LLM Production Safety Platform — standalone, self-contained. No external canari-llm, breakpoint-ai, or canari-forensics dependencies."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "typer",
-    "canari-llm>=0.1.2",
-    "breakpoint-ai>=0.2.1",
-    "canari-forensics>=0.1.5",
+    "httpx>=0.25",
+    "pyahocorasick>=2.0",
+    "rich>=13.0",
 ]
 keywords = ["llm", "safety", "canari", "breakpoint", "forensics"]
 classifiers = [
@@ -36,6 +36,9 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.3",
 ]
+reports = [
+    "fpdf2>=2.7",
+]
 
 [tool.ruff]
 line-length = 100
@@ -49,6 +52,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "vigil.attacks" = ["*.bp.json"]
+"vigil.breakpoint.config" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

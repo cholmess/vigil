@@ -1,6 +1,6 @@
 # Vigil Ecosystem Guide
 
-A practical guide to the four-tool LLM security ecosystem: **Canari**, **Canari Forensics**, **BreakPoint**, and **Vigil**.
+A practical guide to the Vigil LLM safety platform and its three built-in modules: **vigil.canari**, **vigil.forensics**, and **vigil.breakpoint**.
 
 ---
 
@@ -23,12 +23,12 @@ A practical guide to the four-tool LLM security ecosystem: **Canari**, **Canari 
 
 The Vigil ecosystem solves a single problem: **every prompt injection attack should make your system harder to attack, not just patched and forgotten.**
 
-| Package | Role | Question it answers |
-|---------|------|---------------------|
-| **canari-llm** | Live detection | "Are we being attacked right now?" |
-| **canari-forensics** | Historical scanning | "Were we already compromised?" |
-| **breakpoint-ai** | CI gate / regression | "Did this change break anything?" |
-| **vigil** | Integration layer | Connects the three into a feedback loop |
+| Module | Role | Question it answers |
+|--------|------|---------------------|
+| `vigil.canari` | Live detection | "Are we being attacked right now?" |
+| `vigil.forensics` | Historical scanning | "Were we already compromised?" |
+| `vigil.breakpoint` | CI gate / regression | "Did this change break anything?" |
+| **vigil** | Unified platform | All three in one feedback loop |
 
 ### How the Loop Works
 
@@ -53,7 +53,8 @@ scans historical logs     detects live attacks   replays as CI gate
              ▼                 ▼
          ┌───────────────────────────┐
          │          Vigil            │
-         │   (integration layer)     │
+         │  (vigil.canari/forensics/ │
+         │   breakpoint bundled)     │
          │                           │
          │  VigilForensicsWrapper    │
          │  VigilCanariWrapper       │
@@ -106,18 +107,13 @@ Every attack is stored as a `.bp.json` (BreakPoint JSON) file. This is the share
 ### Dependency Graph
 
 ```
-breakpoint-ai     canari-llm      canari-forensics
-(zero deps)       (pydantic,      (stdlib only)
-                   httpx)
-      ▲               ▲                ▲
-      │               │                │
-      └───────────────┼────────────────┘
-                      │
-                    vigil
-              (integration layer)
+vigil
+  ├── vigil.canari        (live detection)
+  ├── vigil.forensics     (historical scanning)
+  └── vigil.breakpoint    (CI gate)
 ```
 
-Vigil depends on the three tools. They do not depend on Vigil or each other — each can be used standalone.
+Vigil is self-contained. The three modules are bundled inside vigil — no separate package installs needed. The standalone packages (canari-llm, canari-forensics, breakpoint-ai) can still be used independently of vigil if desired.
 
 ---
 
@@ -129,7 +125,7 @@ Vigil depends on the three tools. They do not depend on Vigil or each other — 
 pip install vigil
 ```
 
-This installs all four packages. Vigil depends on canari-llm, breakpoint-ai, and canari-forensics.
+Vigil is self-contained — `vigil.canari`, `vigil.forensics`, and `vigil.breakpoint` are bundled inside the package.
 
 ### Development (From Source)
 
@@ -137,22 +133,18 @@ This installs all four packages. Vigil depends on canari-llm, breakpoint-ai, and
 git clone <vigil-ecosystem-repo>
 cd vigil-ecosystem
 
-# Install each package in editable mode
-pip install -e ./breakpoint-ai
-pip install -e ./canari
-pip install -e ./canari-forensics
 pip install -e "./vigil[dev]"
 ```
 
 ### Verify Installation
 
 ```python
-import canari
-import canari_forensics
-import breakpoint
 import vigil
+from vigil.canari import CanariClient
+from vigil.forensics import VigilForensicsWrapper
+from vigil.breakpoint import evaluate
 
-print(vigil.__version__)  # 0.1.0
+print(vigil.__version__)  # 0.2.0
 ```
 
 ---
@@ -200,7 +192,7 @@ for path in result["saved"]:
 
 ### What It Detects
 
-The forensics engine uses canari-forensics' pattern library (31 built-in patterns):
+The forensics engine (`vigil.forensics`) ships with a pattern library (31 built-in patterns):
 
 | Tier | Category | Examples |
 |------|----------|----------|
@@ -693,13 +685,13 @@ This gives you 6 common attack patterns to test against immediately.
 
 ### Can I use the tools independently?
 
-Yes. Each package works standalone:
+Yes. The three capabilities are also available as standalone packages:
 
 - **canari-llm** — `pip install canari-llm` — live detection without Vigil
 - **canari-forensics** — `pip install canari-forensics` — log scanning without Vigil
 - **breakpoint-ai** — `pip install breakpoint-ai` — LLM output evaluation without Vigil
 
-Vigil adds the integration layer that connects them into a feedback loop.
+Vigil bundles all three into a single self-contained package with a unified CLI and feedback loop.
 
 ### What log formats are supported?
 

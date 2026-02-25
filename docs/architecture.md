@@ -1,7 +1,8 @@
 # Architecture
 
-Vigil is an integration layer. It owns no detection logic of its own — it connects three
-existing tools through a shared data format and a unified CLI.
+Vigil is a self-contained LLM safety platform. It internalizes three tools —
+**Canari** (live detection), **Canari Forensics** (log scanning), and **BreakPoint**
+(CI gate) — and connects them through a shared data format and a unified CLI.
 
 ## Component Map
 
@@ -9,17 +10,16 @@ existing tools through a shared data format and a unified CLI.
 ┌─────────────────────────────────────────────────────────────────┐
 │                        vigil (this repo)                        │
 │                                                                 │
-│  vigil.models          .bp.json schema (shared contract)        │
-│  vigil.loop.exporter   Canari alert  → .bp.json                 │
-│  vigil.loop.replayer   .bp.json      → BreakPoint evaluate()    │
-│  vigil.forensics.engine log file     → .bp.json                 │
-│  vigil.cli             `vigil` CLI entry point                  │
-│  vigil.config          .vigil.yml loader                        │
-└───────────┬─────────────────┬──────────────────┬───────────────┘
-            │                 │                  │
-            ▼                 ▼                  ▼
-     canari-llm         canari-forensics    breakpoint-ai
-  (runtime IDS)        (log scanner)       (CI gate)
+│  vigil.models           .bp.json schema (shared contract)       │
+│  vigil.canari           Canari runtime IDS (live detection)     │
+│  vigil.breakpoint       BreakPoint policy suite (CI gate)       │
+│  vigil.forensics        log scanner + pattern library           │
+│  vigil.loop.exporter    Canari alert  → .bp.json                │
+│  vigil.loop.replayer    .bp.json      → vigil.breakpoint.eval() │
+│  vigil.forensics.engine log file      → .bp.json                │
+│  vigil.cli              `vigil` CLI entry point                 │
+│  vigil.config           .vigil.yml loader                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Package Roles
@@ -33,35 +33,50 @@ between the three tools.
 Key classes: `AttackSnapshot`, `SnapshotMetadata`, `SnapshotOrigin`,
 `Canary`, `Attack`, `BreakPointTest`, `ForensicsProvenance`.
 
+### `vigil.canari`
+
+Internalized Canari runtime IDS. Provides `CanariClient`, `CanaryGenerator`,
+`OutputScanner`, `AlertDispatcher`, `IncidentManager`, and framework
+integrations (OpenAI patch, LangChain/LlamaIndex wrappers). Used directly
+by `vigil.loop.exporter`.
+
+### `vigil.breakpoint`
+
+Internalized BreakPoint policy suite. Exposes a single `evaluate()` entry
+point that runs PII, red-team, drift, cost, latency, and output-contract
+policies against a baseline/candidate pair. Used directly by
+`vigil.loop.replayer`.
+
+### `vigil.forensics`
+
+Internalized canari-forensics log scanner. Contains parsers (OTEL, MLflow,
+JSONL, LangSmith, Langfuse, plain), the 27-pattern library, and the
+`ForensicScanner` + `VigilForensicsWrapper` that convert findings into
+`.bp.json` snapshots.
+
 ### `vigil.loop.exporter`
 
-`VigilCanariWrapper` wraps a `CanariClient`. On each `process_turn()` call it
-runs the LLM output through Canari's scanner. If a canary fires it serialises
-the full exchange — system prompt, user input, and assistant response — into
-a `.bp.json` file and returns the path.
-
-Dependency: `canari-llm` (`CanariClient.scan_output`).
+`VigilCanariWrapper` wraps `vigil.canari.CanariClient`. On each
+`process_turn()` call it runs the LLM output through the canari scanner.
+If a canary fires it serialises the full exchange — system prompt, user
+input, and assistant response — into a `.bp.json` file and returns the path.
 
 ### `vigil.loop.replayer`
 
 `VigilBreakPointRunner` loads every `.bp.json` in a directory, extracts the
 assistant response captured at the time of the attack, and evaluates it
-against a known-safe baseline using BreakPoint's `evaluate()` in `full` mode.
+against a known-safe baseline using `vigil.breakpoint.evaluate()` in `full`
+mode.
 
 `full` mode activates the red-team and PII policies in addition to cost/drift,
 giving the broadest possible safety signal for attack replay.
 
-Dependency: `breakpoint-ai` (`breakpoint.evaluate`).
-
 ### `vigil.forensics.engine`
 
-`VigilForensicsWrapper` wraps `canari-forensics`. It parses a log file or
-directory with the appropriate parser (OTEL or MLflow), runs `detect_findings`
-against the 27-pattern library, and converts each `Finding` into a
-`AttackSnapshot` `.bp.json` file.
-
-Dependency: `canari-forensics` (`OTELParser`, `MLflowGatewayParser`,
-`detect_findings`).
+`VigilForensicsWrapper` is the public entry point to `vigil.forensics`. It
+parses a log file or directory with the appropriate parser (OTEL or MLflow),
+runs `detect_findings` against the 27-pattern library, and converts each
+`Finding` into an `AttackSnapshot` `.bp.json` file.
 
 ### `vigil.cli`
 
@@ -102,34 +117,35 @@ LLM app  ──(output)──► VigilCanariWrapper
                          ──────────
 log files ──────────► VigilForensicsWrapper
                               │
-                       canari-forensics
+                       vigil.forensics
                         detect_findings
                               │
                               ▼
                         .bp.json files
                               │
                               ▼
-                      BreakPoint replay
+                  vigil.breakpoint replay
 ```
 
 ## Dependency Graph
 
 ```
 vigil
-  ├── canari-llm          (runtime detection)
-  ├── canari-forensics    (historical scanning)
-  └── breakpoint-ai       (evaluation engine)
+  ├── vigil.canari        (Canari runtime IDS — live detection)
+  ├── vigil.forensics     (canari-forensics scanner — historical scanning)
+  └── vigil.breakpoint    (BreakPoint policy suite — CI gate)
 
-canari-llm          (no vigil dependency)
-canari-forensics    (no vigil dependency)
-breakpoint-ai       (no vigil dependency)
+vigil.loop
+  ├── exporter   uses vigil.canari
+  ├── replayer   uses vigil.breakpoint
+  └── library    ships community .bp.json patterns
 ```
 
-The dependency graph is intentionally one-directional. Vigil depends on all
-three tools; none of them depend on vigil. This means:
+Vigil is self-contained — `vigil.canari`, `vigil.forensics`, and
+`vigil.breakpoint` are internalized modules that mirror the three ecosystem
+packages (canari-llm, canari-forensics, breakpoint-ai). Each can also be used
+as a standalone package independently of vigil.
 
-- canari, canari-forensics, and breakpoint-ai can be used independently.
-- vigil is the integration layer only — it adds no new detection logic.
 - The `canari export-attack` CLI command in the canari package produces
   `.bp.json` files inline (without importing vigil) to preserve this boundary.
 
@@ -141,7 +157,7 @@ These directories are created automatically and are local-only.
 
 ## Pattern Library Tiers
 
-canari-forensics ships with a four-tier pattern library used by
+`vigil.forensics` ships with a four-tier pattern library used by
 `VigilForensicsWrapper`:
 
 | Tier | Kind | Count |
