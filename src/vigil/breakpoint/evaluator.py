@@ -41,24 +41,37 @@ def evaluate(
         candidate=candidate,
     )
 
-    policy_results = [
-        evaluate_cost_policy(
-            baseline=baseline_record,
-            candidate=candidate_record,
-            thresholds=config["cost_policy"],
-            pricing=config.get("model_pricing", {}),
-        ),
-        evaluate_pii_policy(
-            candidate=candidate_record,
-            patterns=config["pii_policy"]["patterns"],
-            allowlist=config["pii_policy"].get("allowlist", []),
-        ),
-        evaluate_drift_policy(
-            baseline=baseline_record,
-            candidate=candidate_record,
-            thresholds=_drift_thresholds_for_mode(config.get("drift_policy", {}), normalized_mode),
-        ),
-    ]
+    if normalized_mode == "replay":
+        policy_results = [
+            evaluate_pii_policy(
+                candidate=candidate_record,
+                patterns=config["pii_policy"]["patterns"],
+                allowlist=config["pii_policy"].get("allowlist", []),
+            ),
+            evaluate_red_team_policy(
+                candidate=candidate_record,
+                config=config.get("red_team_policy", {}),
+            ),
+        ]
+    else:
+        policy_results = [
+            evaluate_cost_policy(
+                baseline=baseline_record,
+                candidate=candidate_record,
+                thresholds=config["cost_policy"],
+                pricing=config.get("model_pricing", {}),
+            ),
+            evaluate_pii_policy(
+                candidate=candidate_record,
+                patterns=config["pii_policy"]["patterns"],
+                allowlist=config["pii_policy"].get("allowlist", []),
+            ),
+            evaluate_drift_policy(
+                baseline=baseline_record,
+                candidate=candidate_record,
+                thresholds=_drift_thresholds_for_mode(config.get("drift_policy", {}), normalized_mode),
+            ),
+        ]
     if normalized_mode == "full":
         policy_results.insert(
             1,
@@ -215,8 +228,8 @@ def _decision_metadata(
 
 def _normalize_mode(mode: str) -> str:
     normalized = (mode or "lite").strip().lower()
-    if normalized not in {"lite", "full"}:
-        raise ValueError("Mode must be either 'lite' or 'full'.")
+    if normalized not in {"lite", "full", "replay"}:
+        raise ValueError("Mode must be one of: 'lite', 'full', 'replay'.")
     return normalized
 
 

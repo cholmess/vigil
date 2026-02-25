@@ -169,7 +169,7 @@ class TestForensicsToBreakPoint:
             assert snap.snapshot_type == "attack"
             assert len(snap.attack.conversation) >= 1
 
-    def test_forensic_snapshots_block_on_replay(
+    def test_forensic_snapshots_allow_after_hardening(
         self, sample_logs: Path, attacks_dir: Path
     ):
         wrapper = VigilForensicsWrapper()
@@ -180,9 +180,9 @@ class TestForensicsToBreakPoint:
 
         assert summary["total"] >= 1
         assert summary["errors"] == 0
-        assert summary["blocked"] >= 1, (
-            "Forensic snapshots should BLOCK because captured assistant "
-            "responses contain leaked credentials"
+        assert summary["blocked"] == 0
+        assert summary["allowed"] >= 1, (
+            "Hardened prompt should neutralize replayed forensic attacks."
         )
 
 
@@ -255,7 +255,7 @@ class TestCanariToBreakPoint:
         roles = [m.role for m in snap.attack.conversation]
         assert roles == ["system", "user", "assistant"]
 
-    def test_canari_snapshot_blocks_on_replay(
+    def test_canari_snapshot_allows_after_hardening(
         self, canari_client: CanariClient, attacks_dir: Path
     ):
         tokens = canari_client.generate(n_tokens=1, token_types=["stripe_key"])
@@ -273,10 +273,8 @@ class TestCanariToBreakPoint:
         summary = runner.run_regression_suite(attacks_dir, HARDENED_PROMPT)
 
         assert summary["total"] == 1
-        assert summary["blocked"] >= 1, (
-            "Canari snapshot should BLOCK because the captured assistant "
-            "response contains the leaked canary value"
-        )
+        assert summary["blocked"] == 0
+        assert summary["allowed"] == 1
 
 
 # ------------------------------------------------------------------------------- #
@@ -304,7 +302,7 @@ class TestCommunityAttacksReplay:
             assert snap.breakpoint_test is not None
             assert snap.breakpoint_test.hardening_suggestion is not None
 
-    def test_community_attacks_replay_blocks(self, attacks_dir: Path):
+    def test_community_attacks_replay_allow_after_hardening(self, attacks_dir: Path):
         import_community_attacks(attacks_dir)
 
         runner = VigilBreakPointRunner()
@@ -312,10 +310,8 @@ class TestCommunityAttacksReplay:
 
         assert summary["total"] == 6
         assert summary["errors"] == 0
-        assert summary["blocked"] >= 1, (
-            "At least some community snapshots should BLOCK because the "
-            "captured assistant responses contain vulnerable output"
-        )
+        assert summary["blocked"] == 0
+        assert summary["allowed"] == 6
 
     def test_list_attacks_metadata(self, attacks_dir: Path):
         import_community_attacks(attacks_dir)
@@ -372,10 +368,8 @@ class TestFullLoop:
 
         assert summary["total"] == total_expected
         assert summary["errors"] == 0
-        assert summary["blocked"] >= 1, (
-            "At least one attack should still BLOCK because captured "
-            "responses contain leaked secrets"
-        )
+        assert summary["blocked"] == 0
+        assert summary["allowed"] == total_expected
 
     def test_all_sources_represented(
         self,

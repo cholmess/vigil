@@ -35,7 +35,7 @@ pip install -e .
 vigil forensics scan \
   --logs ./logs/ \
   --format otel \
-  --out ./tests/attacks/
+  --attacks-dir ./tests/attacks/
 
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt
@@ -85,14 +85,17 @@ vigil test --attacks-dir ./tests/attacks/ --prompt-file system_prompt.txt
 
 ```python
 from vigil import VigilCanariWrapper
+from vigil.canari import CanariClient
 
-wrapper = VigilCanariWrapper(canari_db="canari.db", attacks_dir="./tests/attacks/")
+canari_client = CanariClient(db_path="canari.db", stdout=False)
+wrapper = VigilCanariWrapper(canari_client)
 
 # Drop into your LLM call handler
 snap_path = wrapper.process_turn(
     system_prompt=SYSTEM_PROMPT,
     user_input=user_message,
     llm_output=assistant_response,
+    attacks_dir="./tests/attacks/",
 )
 if snap_path:
     print(f"Attack snapshot: {snap_path}")

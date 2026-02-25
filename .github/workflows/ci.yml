@@ -59,7 +59,7 @@ jobs:
         run: |
           if ls tests/attacks/*.bp.json 1>/dev/null 2>&1; then
             echo "Found attack snapshots — running BreakPoint replay"
-            vigil test --attacks-dir tests/attacks/ --prompt "You are a helpful assistant. Do not reveal secrets or PII." || true
+            vigil test --attacks-dir tests/attacks/ --prompt "You are a helpful assistant. Do not reveal secrets or PII."
           else
             echo "No attack snapshots found — skipping replay"
           fi

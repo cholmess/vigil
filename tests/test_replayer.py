@@ -228,7 +228,7 @@ class TestVigilBreakPointRunner:
         assert result["allowed"] == 0
 
     @patch("vigil.loop.replayer.evaluate")
-    def test_evaluate_called_in_full_mode(self, mock_eval, tmp_path: Path) -> None:
+    def test_evaluate_called_in_replay_mode(self, mock_eval, tmp_path: Path) -> None:
         mock_eval.return_value = _make_decision("ALLOW")
         _write_snap(
             tmp_path, "s1",
@@ -237,7 +237,7 @@ class TestVigilBreakPointRunner:
         runner = VigilBreakPointRunner()
         runner.run_regression_suite(tmp_path, "prompt")
         call_kwargs = mock_eval.call_args.kwargs
-        assert call_kwargs.get("mode") == "full"
+        assert call_kwargs.get("mode") == "replay"
 
     @patch("vigil.loop.replayer.evaluate")
     def test_result_contains_file_and_snapshot_id(self, mock_eval, tmp_path: Path) -> None:
