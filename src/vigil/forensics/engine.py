@@ -23,6 +23,7 @@ class AuditSummary(TypedDict):
     format: str
     turns_parsed: int
     findings: int
+    finding_details: list[dict]
     saved: list[str]
     errors: int
 
@@ -70,6 +71,16 @@ class VigilForensicsWrapper:
             format=format,
             turns_parsed=len(turns),
             findings=len(findings),
+            finding_details=[
+                {
+                    "finding_id": f.finding_id,
+                    "severity": f.severity,
+                    "pattern_id": f.pattern_id,
+                    "timestamp": f.timestamp,
+                    "context": f.context,
+                }
+                for f in findings
+            ],
             saved=saved,
             errors=errors,
         )

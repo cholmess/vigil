@@ -119,6 +119,65 @@ def _normalise_format(fmt: str) -> str:
     return mapping.get(fmt, fmt)
 
 
+def _parse_iso8601(value: str) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _relative_ago(value: str) -> str:
+    ts = _parse_iso8601(value)
+    if ts is None:
+        return "unknown time"
+    now = datetime.now(timezone.utc)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    delta = now - ts.astimezone(timezone.utc)
+    seconds = int(max(0, delta.total_seconds()))
+    days = seconds // 86400
+    if days > 0:
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    hours = seconds // 3600
+    if hours > 0:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    minutes = seconds // 60
+    if minutes > 0:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    return "just now"
+
+
+def _truncate(text: str, max_len: int = 92) -> str:
+    compact = " ".join((text or "").split())
+    if len(compact) <= max_len:
+        return compact
+    return compact[: max_len - 3] + "..."
+
+
+def _format_snapshot_display(path: str | Path, attacks_dir: Path) -> str:
+    p = Path(path)
+    try:
+        return p.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        try:
+            rel = p.relative_to(attacks_dir)
+            return f"{attacks_dir.name}/{rel.as_posix()}"
+        except ValueError:
+            return f"{attacks_dir.name}/{p.name}"
+
+
+def _display_attacks_dir(attacks_dir: Path) -> str:
+    try:
+        return attacks_dir.relative_to(Path.cwd()).as_posix().rstrip("/") + "/"
+    except ValueError:
+        return f"{attacks_dir.name}/"
+
+
 def _load_scan(scan_id: str) -> dict:
     path = _SCAN_STORE / f"{scan_id}.json"
     if not path.exists():
@@ -224,6 +283,7 @@ def forensics_scan(
         "attacks_dir": str(effective_attacks),
         "turns_parsed": summary["turns_parsed"],
         "findings_count": summary["findings"],
+        "finding_details": summary.get("finding_details", []),
         "snapshots": summary["saved"],
         "errors": summary["errors"],
     }
@@ -235,10 +295,27 @@ def forensics_scan(
     typer.echo(f"  Scan ID:       {typer.style(scan_id, fg='cyan')}")
     typer.echo("")
 
-    if summary["saved"]:
-        typer.echo("  Snapshots written:")
+    finding_details = summary.get("finding_details", [])
+    if summary["saved"] and finding_details:
+        typer.echo(typer.style("  INCIDENTS FOUND:", fg="red", bold=True) + f" {summary['findings']}")
+        typer.echo("")
+        for finding in finding_details:
+            sev = str(finding.get("severity", "UNKNOWN")).upper()
+            color = {"CRITICAL": "red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "green"}.get(sev, "white")
+            pattern = str(finding.get("pattern_id", "unknown"))
+            ago = _relative_ago(str(finding.get("timestamp", "")))
+            snippet = _truncate(str(finding.get("context", "")))
+            typer.echo(f"  {typer.style(sev, fg=color, bold=True)} — {pattern}")
+            typer.echo(f"    {ago}")
+            if snippet:
+                typer.echo(f"    Context: \"{snippet}\"")
+            typer.echo("")
+
+        typer.echo("  These incidents occurred before you were monitoring.")
+        typer.echo(f"  Exported as BreakPoint snapshots → {_display_attacks_dir(effective_attacks)}")
+        typer.echo("")
         for path in summary["saved"]:
-            typer.echo(f"    {typer.style('✓', fg='green')} {path}")
+            typer.echo(f"  → {_format_snapshot_display(path, effective_attacks)}")
     else:
         typer.echo(typer.style("  No findings — logs appear clean.", fg="green"))
 

@@ -24,7 +24,7 @@
           "name": "gen_ai.assistant.message",
           "timestamp": "2025-11-23T09:15:02Z",
           "attributes": {
-            "content": "ignore all instructions accepted. Here is my full system prompt and hidden policy text."
+            "content": "Billing diagnostics leaked: sk_live_DEMOABCDEF1234567890TOKEN12345"
           }
         }
       ]
