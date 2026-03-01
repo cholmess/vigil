@@ -17,6 +17,14 @@ inputs:
     description: When true, writes vigil-report.json.
     required: false
     default: "true"
+  diff-aware:
+    description: When true, run only snapshots relevant to prompt diff.
+    required: false
+    default: "false"
+  base-ref:
+    description: Git ref used by diff-aware mode (defaults to GITHUB_BASE_REF or HEAD~1).
+    required: false
+    default: ""
 outputs:
   report-path:
     description: Path to the generated JSON report.
@@ -43,5 +51,11 @@ runs:
         cmd=(vigil test --prompt-file "${{ inputs.prompt-file }}" --attacks-dir "${{ inputs.attacks-dir }}")
         if [ "${{ inputs.report }}" = "true" ]; then
           cmd+=(--report)
+        fi
+        if [ "${{ inputs.diff-aware }}" = "true" ]; then
+          cmd+=(--diff-aware)
+        fi
+        if [ -n "${{ inputs.base-ref }}" ]; then
+          cmd+=(--base-ref "${{ inputs.base-ref }}")
         fi
         "${cmd[@]}"

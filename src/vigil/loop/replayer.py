@@ -62,6 +62,8 @@ class VigilBreakPointRunner:
         self,
         attacks_dir: str | Path,
         current_system_prompt: str,
+        *,
+        snapshot_files: list[Path] | None = None,
     ) -> RegressionSummary:
         """
         Loop every .bp.json in *attacks_dir*, load it as an AttackSnapshot,
@@ -71,7 +73,7 @@ class VigilBreakPointRunner:
         Returns a summary of ALLOW / WARN / BLOCK verdicts.
         """
         attacks_path = Path(attacks_dir)
-        bp_files = sorted(attacks_path.glob("*.bp.json"))
+        bp_files = snapshot_files if snapshot_files is not None else sorted(attacks_path.glob("*.bp.json"))
 
         results: list[AttackResult] = []
         errors = 0

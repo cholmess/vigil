@@ -44,6 +44,10 @@ vigil network pull --community
 vigil test --prompt-file system_prompt.txt
 # → BLOCK: still vulnerable
 
+# Week 3: diff-aware mode (fast CI loop)
+vigil test --prompt-file system_prompt.txt --diff-aware
+# → runs only snapshots relevant to prompt diff
+
 # 3) Harden — read the hardening_suggestion in the snapshot, edit system_prompt.txt
 
 # 4) Verify
@@ -74,11 +78,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/vigil-test
         with:
           prompt-file: system_prompt.txt
           attacks-dir: tests/attacks
           report: "true"
+          diff-aware: "true"
 ```
 
 ## Forensic audit workflow

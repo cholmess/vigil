@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
@@ -18,6 +20,11 @@ from vigil.loop.library import (
     import_attacks,
     import_community_attacks,
     list_attacks,
+)
+from vigil.loop.diff_aware import (
+    extract_changed_tokens_from_diff,
+    infer_relevant_techniques,
+    select_snapshots_for_diff,
 )
 from vigil.loop.replayer import VigilBreakPointRunner
 
@@ -246,6 +253,27 @@ def _write_test_report(path: Path, summary: dict) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
+
+
+def _resolve_diff_base(base_ref: str | None) -> str:
+    if base_ref:
+        return base_ref
+    github_base = os.getenv("GITHUB_BASE_REF")
+    if github_base:
+        return f"origin/{github_base}"
+    return "HEAD~1"
+
+
+def _prompt_diff_text(prompt_file: Path, base_ref: str | None) -> str:
+    base = _resolve_diff_base(base_ref)
+    cmd = ["git", "diff", "--unified=0", base, "--", str(prompt_file)]
+    try:
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except Exception:
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return proc.stdout
 
 
 # --------------------------------------------------------------------------- #
@@ -802,6 +830,18 @@ def test(
         "--report",
         help="Write a JSON report to ./vigil-report.json.",
     ),
+    diff_aware: bool = typer.Option(
+        False,
+        "--diff-aware",
+        help="Run only snapshots relevant to prompt changes.",
+        is_flag=True,
+    ),
+    base_ref: Optional[str] = typer.Option(
+        None,
+        "--base-ref",
+        help="Git ref to diff against for --diff-aware (default: GITHUB_BASE_REF or HEAD~1).",
+        show_default=False,
+    ),
 ) -> None:
     """Replay every .bp.json attack snapshot against your current system prompt using BreakPoint.
 
@@ -835,15 +875,46 @@ def test(
         typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
         raise typer.Exit(code=2)
 
-    _echo_sep("Vigil Regression Suite")
+    all_snapshot_files = sorted(Path(effective_attacks).glob("*.bp.json"))
+    selected_files: list[Path] | None = None
+
+    if diff_aware:
+        if prompt_file is None:
+            typer.echo(
+                typer.style("Error: --diff-aware requires --prompt-file.", fg="red"),
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        diff_text = _prompt_diff_text(prompt_file, base_ref)
+        changed_tokens = extract_changed_tokens_from_diff(diff_text)
+        relevant_techniques = infer_relevant_techniques(changed_tokens)
+        selected_files = select_snapshots_for_diff(
+            effective_attacks,
+            changed_tokens=changed_tokens,
+            relevant_techniques=relevant_techniques,
+        )
+        # Fallback to full suite when diff parsing yields no reliable selection.
+        if not selected_files:
+            selected_files = all_snapshot_files
+
+    title = "Vigil Regression Suite (diff-aware)" if diff_aware else "Vigil Regression Suite"
+    _echo_sep(title)
     typer.echo(f"  Attacks dir:  {effective_attacks}{_source_label(attacks_from_cfg)}")
     preview = current_system_prompt[:60].replace("\n", " ")
     typer.echo(f"  System prompt: \"{preview}{'...' if len(current_system_prompt) > 60 else ''}\"")
+    if diff_aware:
+        total_available = len(all_snapshot_files)
+        total_selected = len(selected_files or [])
+        typer.echo(f"  Running {total_selected} of {total_available} attacks relevant to this diff")
     _echo_sep()
 
     runner = VigilBreakPointRunner()
     try:
-        summary = runner.run_regression_suite(effective_attacks, current_system_prompt)
+        summary = runner.run_regression_suite(
+            effective_attacks,
+            current_system_prompt,
+            snapshot_files=selected_files,
+        )
     except Exception as exc:
         typer.echo(typer.style(f"Error running regression suite: {exc}", fg="red", bold=True), err=True)
         raise typer.Exit(code=2)

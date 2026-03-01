@@ -267,3 +267,19 @@ class TestVigilBreakPointRunner:
         runner.run_regression_suite(tmp_path, "fallback prompt")
         call_kwargs = mock_eval.call_args.kwargs
         assert call_kwargs["baseline"]["output"] == "Safe rejection response."
+
+    @patch("vigil.loop.replayer.evaluate")
+    def test_run_regression_suite_with_selected_snapshot_files(self, mock_eval, tmp_path: Path) -> None:
+        mock_eval.return_value = _make_decision("ALLOW")
+        s1 = _write_snap(tmp_path, "s1", [{"role": "assistant", "content": "response-1"}])
+        _write_snap(tmp_path, "s2", [{"role": "assistant", "content": "response-2"}])
+
+        runner = VigilBreakPointRunner()
+        result = runner.run_regression_suite(
+            tmp_path,
+            "prompt",
+            snapshot_files=[s1],
+        )
+        assert result["total"] == 1
+        assert len(result["results"]) == 1
+        assert result["results"][0]["file"] == "s1.bp.json"

@@ -132,7 +132,7 @@ Generates a compliance report for the completed scan.
 Regression suite replay using `vigil.breakpoint`.
 
 ```
-vigil test [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--report]
+vigil test [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--report] [--diff-aware] [--base-ref REF]
 ```
 
 Loads every `.bp.json` from `--attacks-dir` (default: `.vigil-data/attacks/`),
@@ -147,6 +147,8 @@ extracts the captured LLM response, and evaluates it against the baseline using
 | `--prompt-file` | none | Path to a system prompt file. |
 | `--prompt` | none | Inline system prompt string (mutually exclusive with `--prompt-file`). |
 | `--report` | disabled | Writes `./vigil-report.json` with shield score and per-snapshot results. |
+| `--diff-aware` | disabled | Runs only snapshots relevant to prompt-file diffs. Requires `--prompt-file`. |
+| `--base-ref` | `GITHUB_BASE_REF` or `HEAD~1` | Git ref used to compute prompt diff in diff-aware mode. |
 
 **Exit codes:**
 
