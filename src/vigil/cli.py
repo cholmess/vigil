@@ -2640,6 +2640,136 @@ def train_curriculum(
             )
 
 
+@train_app.command("bootstrap")
+def train_bootstrap(
+    out_dir: Path = typer.Option(
+        Path(".vigil-data/train"),
+        "--out-dir",
+        help="Directory for training artifacts.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+    val_ratio: Optional[float] = typer.Option(
+        None,
+        "--val-ratio",
+        help="Optional validation split ratio (0-1).",
+        show_default=False,
+    ),
+    seed: int = typer.Option(42, "--seed", help="Seed for deterministic split."),
+    max_imbalance: float = typer.Option(5.0, "--max-imbalance", help="Fail threshold for imbalance ratio."),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Fail when doctor checks fail (default: continue and report).",
+        is_flag=True,
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for bootstrap report."),
+) -> None:
+    """Run end-to-end training artifact bootstrap flow in one command."""
+    if val_ratio is not None and not (0.0 < val_ratio < 1.0):
+        typer.echo(typer.style("Error: --val-ratio must be between 0 and 1.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    corpus_file = out_dir / "corpus.jsonl"
+    report_file = out_dir / "prepare-report.json"
+    bundle_file = out_dir / "train-bundle.tar.gz"
+
+    prepared_path, rows = export_corpus_jsonl(
+        network_dir=network_dir,
+        out_file=corpus_file,
+    )
+    prepare_payload: dict[str, object] = {
+        "rows": rows,
+        "corpus_file": str(prepared_path),
+        "report_file": str(report_file),
+    }
+    if val_ratio is not None:
+        train_file, val_file, train_rows, val_rows = split_corpus_jsonl(
+            corpus_file=prepared_path,
+            out_dir=out_dir,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+        prepare_payload["split"] = {
+            "train_file": str(train_file),
+            "val_file": str(val_file),
+            "train_rows": train_rows,
+            "val_rows": val_rows,
+            "val_ratio": val_ratio,
+            "seed": seed,
+        }
+
+    report_payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rows": rows,
+        "corpus_file": str(prepared_path),
+        "technique_trends": technique_trends(load_manifest_records(network_dir=network_dir), days=30),
+        "class_trends": class_trends(load_manifest_records(network_dir=network_dir), days=30),
+    }
+    if "split" in prepare_payload:
+        report_payload["split"] = prepare_payload["split"]
+    report_file.write_text(json.dumps(report_payload, indent=2), encoding="utf-8")
+
+    validation = validate_corpus_jsonl(corpus_file=prepared_path)
+    balance = build_corpus_balance(corpus_file=prepared_path)
+    doctor = {
+        "ok": bool(validation.get("ok")) and bool(balance.get("ok"))
+        and (
+            (balance.get("imbalance_ratio") is None)
+            or (float(balance.get("imbalance_ratio")) <= float(max_imbalance))
+        ),
+        "max_imbalance": max_imbalance,
+        "validation": validation,
+        "balance": balance,
+        "stats": build_corpus_stats(network_dir=network_dir),
+    }
+
+    bundle_path: Optional[Path] = None
+    bundle_manifest: Optional[Path] = None
+    if rows > 0:
+        manifest = build_train_bundle_manifest(train_dir=out_dir)
+        if manifest["files"]:
+            bundle_path, bundle_manifest = package_train_bundle(train_dir=out_dir, out_file=bundle_file)
+
+    payload = {
+        "ok": bool(rows > 0) and bool(validation.get("ok")) and bool(balance.get("ok")) and bool(doctor.get("ok")),
+        "prepare": prepare_payload,
+        "validation": validation,
+        "balance": balance,
+        "doctor": doctor,
+        "bundle": {
+            "bundle_file": str(bundle_path) if bundle_path else None,
+            "manifest_file": str(bundle_manifest) if bundle_manifest else None,
+            "packaged": bundle_path is not None,
+        },
+    }
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Bootstrap report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Bootstrap")
+        typer.echo(f"  Rows exported: {rows}")
+        typer.echo(f"  Validation: {'OK' if validation.get('ok') else 'FAIL'}")
+        typer.echo(f"  Balance: {'OK' if balance.get('ok') else 'FAIL'}")
+        typer.echo(f"  Doctor: {'PASS' if doctor.get('ok') else 'FAIL'}")
+        typer.echo(f"  Bundle: {'READY' if bundle_path else 'SKIPPED'}")
+        typer.echo(f"  Overall: {'PASS' if payload['ok'] else 'FAIL'}")
+
+    if strict and not payload["ok"]:
+        raise typer.Exit(code=1)
+
+
 @network_app.command("remote-pull")
 def network_remote_pull(
     repo: str = typer.Option(..., "--repo", help="Remote git repository URL/path containing exchange/"),

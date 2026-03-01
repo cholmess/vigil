@@ -361,6 +361,51 @@ def test_train_curriculum_json_output(monkeypatch, tmp_path: Path) -> None:
         assert payload["curriculum"][0]["technique"] == "tool_injection"
 
 
+def test_train_bootstrap_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.export_corpus_jsonl",
+        lambda network_dir, out_file: (Path(out_file), 3),
+    )
+    monkeypatch.setattr(
+        "vigil.cli.validate_corpus_jsonl",
+        lambda corpus_file: {"ok": True, "rows": 3, "invalid_rows": 0, "errors": []},
+    )
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_balance",
+        lambda corpus_file: {
+            "ok": True,
+            "rows": 3,
+            "technique_counts": {"jailbreak": 2, "tool_injection": 1},
+            "suggested_weights": {"jailbreak": 0.5, "tool_injection": 1.0},
+            "imbalance_ratio": 2.0,
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_stats",
+        lambda network_dir: {"total_records": 10, "distributions": {}, "time_range": {}, "organizations": {}},
+    )
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [])
+    monkeypatch.setattr("vigil.cli.technique_trends", lambda records, days=30: [])
+    monkeypatch.setattr("vigil.cli.class_trends", lambda records, days=30: [])
+    monkeypatch.setattr(
+        "vigil.cli.build_train_bundle_manifest",
+        lambda train_dir: {"files": [{"path": "corpus.jsonl"}]},
+    )
+    monkeypatch.setattr(
+        "vigil.cli.package_train_bundle",
+        lambda train_dir, out_file: (Path(out_file), Path(train_dir) / "bundle-manifest.json"),
+    )
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("bootstrap.json")
+        result = runner.invoke(app, ["train", "bootstrap", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+        assert payload["bundle"]["packaged"] is True
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

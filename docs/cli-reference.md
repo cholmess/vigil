@@ -80,6 +80,14 @@ vigil train curriculum [--corpus-file PATH] [--network-dir DIR] [--days N] [--to
 
 Builds a prioritized technique curriculum by combining corpus-balance weights with recent network technique trends.
 
+### `vigil train bootstrap`
+
+```
+vigil train bootstrap [--out-dir DIR] [--network-dir DIR] [--val-ratio FLOAT] [--seed N] [--max-imbalance N] [--strict] [--format text|json] [--out PATH]
+```
+
+Runs an end-to-end training bootstrap flow in one command: export corpus, optional split, validate, balance/doctor checks, and bundle packaging.
+
 ## `vigil network`
 
 Network snapshot sync commands.
