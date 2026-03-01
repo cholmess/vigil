@@ -6,6 +6,7 @@ import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from vigil.models import AttackSnapshot
 
@@ -48,3 +49,64 @@ def store_exchange_snapshot(snapshot_file: str | Path, *, network_dir: str | Pat
         fh.write(json.dumps(record) + "\n")
 
     return network_id, dest
+
+
+def _parse_iso8601(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def pull_exchange_snapshots(
+    *,
+    network_dir: str | Path = ".vigil-data/network",
+    out_dir: str | Path = ".vigil-data/network/pulled",
+    since: str | None = None,
+) -> list[Path]:
+    """
+    Pull snapshots from local exchange manifest into out_dir.
+
+    If ``since`` is set, only records with submitted_at >= since are copied.
+    """
+    root = Path(network_dir)
+    manifest = root / "exchange" / "manifest.jsonl"
+    if not manifest.exists():
+        return []
+
+    since_dt = _parse_iso8601(since)
+    dst = Path(out_dir)
+    dst.mkdir(parents=True, exist_ok=True)
+
+    pulled: list[Path] = []
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        row = line.strip()
+        if not row:
+            continue
+        try:
+            record: dict[str, Any] = json.loads(row)
+        except json.JSONDecodeError:
+            continue
+
+        submitted = _parse_iso8601(str(record.get("submitted_at", "")))
+        if since_dt is not None and (submitted is None or submitted < since_dt):
+            continue
+
+        src = Path(str(record.get("file", "")))
+        if not src.exists():
+            continue
+        dest = dst / src.name
+        shutil.copy2(src, dest)
+        pulled.append(dest)
+
+    return pulled

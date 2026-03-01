@@ -79,3 +79,31 @@ def test_vigil_network_pull_community_imports_snapshots(tmp_path: Path) -> None:
         attacks_dir = Path("tests/attacks")
         assert attacks_dir.exists()
         assert len(list(attacks_dir.glob("*.bp.json"))) >= 1
+
+
+def test_vigil_test_network_uses_network_cache_dir(monkeypatch, tmp_path: Path) -> None:
+    called = {}
+
+    class _FakeRunner:
+        def run_regression_suite(self, attacks_dir, current_system_prompt, snapshot_files=None):
+            called["attacks_dir"] = str(attacks_dir)
+            return {
+                "total": 0,
+                "allowed": 0,
+                "warned": 0,
+                "blocked": 0,
+                "errors": 0,
+                "results": [],
+            }
+
+    monkeypatch.setattr("vigil.cli.VigilBreakPointRunner", _FakeRunner)
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        cache = Path(".vigil-data/network/pulled")
+        cache.mkdir(parents=True, exist_ok=True)
+        prompt_path = Path("system_prompt.txt")
+        prompt_path.write_text("You are safe.", encoding="utf-8")
+
+        result = runner.invoke(app, ["test", "--network", "--prompt-file", str(prompt_path)])
+        assert result.exit_code == 0
+        assert called["attacks_dir"] == str(cache)

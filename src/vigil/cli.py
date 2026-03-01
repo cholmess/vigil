@@ -27,7 +27,7 @@ from vigil.loop.diff_aware import (
     select_snapshots_for_diff,
 )
 from vigil.loop.replayer import VigilBreakPointRunner
-from vigil.network.exchange import store_exchange_snapshot
+from vigil.network.exchange import pull_exchange_snapshots, store_exchange_snapshot
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -844,6 +844,12 @@ def test(
         help="Git ref to diff against for --diff-aware (default: GITHUB_BASE_REF or HEAD~1).",
         show_default=False,
     ),
+    network: bool = typer.Option(
+        False,
+        "--network",
+        help="Run against snapshots pulled from the network cache.",
+        is_flag=True,
+    ),
 ) -> None:
     """Replay every .bp.json attack snapshot against your current system prompt using BreakPoint.
 
@@ -853,9 +859,13 @@ def test(
     """
     cfg = VigilConfig.load()
 
-    effective_attacks, attacks_from_cfg = _resolve_path(
-        attacks_dir, cfg.paths.attacks, Path("./tests/attacks")
-    )
+    if network and attacks_dir is None:
+        effective_attacks = Path(".vigil-data/network/pulled")
+        attacks_from_cfg = False
+    else:
+        effective_attacks, attacks_from_cfg = _resolve_path(
+            attacks_dir, cfg.paths.attacks, Path("./tests/attacks")
+        )
 
     if prompt and prompt_file:
         typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
@@ -1009,29 +1019,42 @@ def network_pull(
         help="Destination directory for pulled snapshots. Falls back to paths.attacks in .vigil.yml.",
         show_default=False,
     ),
+    since: Optional[str] = typer.Option(
+        None,
+        "--since",
+        help="Pull network snapshots submitted on/after this ISO date (e.g. 2026-01-01).",
+        show_default=False,
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
 ) -> None:
     """Pull attack snapshots from the Vigil network."""
-    if not community:
-        typer.echo(
-            typer.style(
-                "Error: choose a source. For now, use `vigil network pull --community`.",
-                fg="red",
-            ),
-            err=True,
-        )
-        raise typer.Exit(code=2)
-
     cfg = VigilConfig.load()
-    effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
 
-    copied = import_community_attacks(effective_attacks)
-    if copied:
-        typer.echo(typer.style(f"Downloaded {len(copied)} community snapshot(s).", fg="green"))
-        typer.echo(f"  Destination: {effective_attacks}{_source_label(from_cfg)}")
-        typer.echo("  Run `vigil test --network` equivalent:")
-        typer.echo(f"    vigil test --attacks-dir {effective_attacks} --prompt-file <file>")
+    if community:
+        effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+        copied = import_community_attacks(effective_attacks)
+        if copied:
+            typer.echo(typer.style(f"Downloaded {len(copied)} community snapshot(s).", fg="green"))
+            typer.echo(f"  Destination: {effective_attacks}{_source_label(from_cfg)}")
+            typer.echo("  Run `vigil test --network` equivalent:")
+            typer.echo(f"    vigil test --attacks-dir {effective_attacks} --prompt-file <file>")
+        else:
+            typer.echo(typer.style("No community snapshots available.", fg="yellow"))
+        return
+
+    pulled_dir = attacks_dir or Path(".vigil-data/network/pulled")
+    pulled = pull_exchange_snapshots(network_dir=network_dir, out_dir=pulled_dir, since=since)
+    if pulled:
+        typer.echo(typer.style(f"Downloaded {len(pulled)} network snapshot(s).", fg="green"))
+        typer.echo(f"  Destination: {pulled_dir}")
+        typer.echo("  Run:")
+        typer.echo("    vigil test --network --prompt-file <file>")
     else:
-        typer.echo(typer.style("No community snapshots available.", fg="yellow"))
+        typer.echo(typer.style("No matching network snapshots found.", fg="yellow"))
 
 
 @network_app.command("sanitize")

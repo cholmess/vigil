@@ -9,17 +9,19 @@ Network snapshot sync commands.
 ### `vigil network pull`
 
 ```
-vigil network pull --community [--attacks-dir DIR]
+vigil network pull [--community] [--since YYYY-MM-DD] [--attacks-dir DIR]
 ```
 
 Pulls community attack snapshots into your local attacks directory in one command.
+Without `--community`, pulls from your local exchange manifest into `.vigil-data/network/pulled`.
 
 **Options:**
 
 | Flag | Default | Description |
 |---|---|---|
-| `--community` | required | Pull from the built-in community snapshot library. |
-| `--attacks-dir` | `.vigil-data/attacks/` | Destination directory for pulled `.bp.json` snapshots. |
+| `--community` | disabled | Pull from the built-in community snapshot library. |
+| `--since` | none | Only pull snapshots submitted on/after this date. |
+| `--attacks-dir` | `.vigil-data/network/pulled` (exchange mode) | Destination directory for pulled `.bp.json` snapshots. |
 
 ### `vigil network sanitize`
 
@@ -148,7 +150,7 @@ Generates a compliance report for the completed scan.
 Regression suite replay using `vigil.breakpoint`.
 
 ```
-vigil test [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--report] [--diff-aware] [--base-ref REF]
+vigil test [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--report] [--diff-aware] [--base-ref REF] [--network]
 ```
 
 Loads every `.bp.json` from `--attacks-dir` (default: `.vigil-data/attacks/`),
@@ -165,6 +167,7 @@ extracts the captured LLM response, and evaluates it against the baseline using
 | `--report` | disabled | Writes `./vigil-report.json` with shield score and per-snapshot results. |
 | `--diff-aware` | disabled | Runs only snapshots relevant to prompt-file diffs. Requires `--prompt-file`. |
 | `--base-ref` | `GITHUB_BASE_REF` or `HEAD~1` | Git ref used to compute prompt diff in diff-aware mode. |
+| `--network` | disabled | Uses `.vigil-data/network/pulled` as attack source unless `--attacks-dir` is explicitly set. |
 
 **Exit codes:**
 

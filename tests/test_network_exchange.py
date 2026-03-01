@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
-from vigil.network.exchange import store_exchange_snapshot
+from vigil.network.exchange import pull_exchange_snapshots, store_exchange_snapshot
 
 
 def _snapshot(tmp_path: Path, name: str) -> Path:
@@ -38,3 +38,24 @@ def test_store_exchange_snapshot_increments_sequence(tmp_path: Path) -> None:
     id1, _ = store_exchange_snapshot(p1, network_dir=tmp_path / "network")
     id2, _ = store_exchange_snapshot(p2, network_dir=tmp_path / "network")
     assert id1 != id2
+
+
+def test_pull_exchange_snapshots_copies_to_out_dir(tmp_path: Path) -> None:
+    snap_path = _snapshot(tmp_path, "a")
+    network_dir = tmp_path / "network"
+    network_id, _ = store_exchange_snapshot(snap_path, network_dir=network_dir)
+    pulled = pull_exchange_snapshots(network_dir=network_dir, out_dir=tmp_path / "pulled")
+    assert len(pulled) == 1
+    assert pulled[0].name == f"{network_id}.bp.json"
+
+
+def test_pull_exchange_snapshots_respects_since_filter(tmp_path: Path) -> None:
+    snap_path = _snapshot(tmp_path, "a")
+    network_dir = tmp_path / "network"
+    store_exchange_snapshot(snap_path, network_dir=network_dir)
+    pulled = pull_exchange_snapshots(
+        network_dir=network_dir,
+        out_dir=tmp_path / "pulled",
+        since="2999-01-01",
+    )
+    assert pulled == []

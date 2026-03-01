@@ -43,10 +43,12 @@ vigil network pull --community
 # (Phase 2) Sanitize and submit snapshots to the local exchange
 vigil network sanitize --in ./tests/attacks --out ./.vigil-data/network/sanitized --term Acme
 vigil network push ./.vigil-data/network/sanitized/inc-abc123.bp.json
+vigil network pull --since 2026-01-01
 
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt
 # → BLOCK: still vulnerable
+vigil test --network --prompt-file system_prompt.txt
 
 # Week 3: diff-aware mode (fast CI loop)
 vigil test --prompt-file system_prompt.txt --diff-aware
