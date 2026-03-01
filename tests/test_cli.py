@@ -254,6 +254,28 @@ def test_train_verify_bundle_json_output(monkeypatch, tmp_path: Path) -> None:
         assert payload["ok"] is True
 
 
+def test_train_balance_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_balance",
+        lambda corpus_file: {
+            "ok": True,
+            "corpus_file": str(corpus_file),
+            "rows": 3,
+            "technique_counts": {"jailbreak": 2, "tool_injection": 1},
+            "suggested_weights": {"jailbreak": 0.5, "tool_injection": 1.0},
+            "imbalance_ratio": 2.0,
+            "errors": [],
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("balance.json")
+        result = runner.invoke(app, ["train", "balance", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+        assert payload["suggested_weights"]["tool_injection"] == 1.0
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

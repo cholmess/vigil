@@ -10,6 +10,7 @@ from pathlib import Path
 from vigil.models import Attack, AttackSnapshot, BreakPointTest, Canary, Message, SnapshotMetadata
 from vigil.network.corpus import (
     build_corpus_stats,
+    build_corpus_balance,
     build_train_bundle_manifest,
     export_corpus_jsonl,
     package_train_bundle,
@@ -180,3 +181,18 @@ def test_verify_train_bundle_fails_for_tampered_bundle(tmp_path: Path) -> None:
     payload = verify_train_bundle(bundle_file=tampered)
     assert payload["ok"] is False
     assert "corpus.jsonl" in payload["mismatched_files"]
+
+
+def test_build_corpus_balance_suggests_weights(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus.jsonl"
+    corpus.write_text(
+        '{"snapshot_id":"a","technique":"jailbreak","conversation":[{}]}\n'
+        '{"snapshot_id":"b","technique":"jailbreak","conversation":[{}]}\n'
+        '{"snapshot_id":"c","technique":"tool_injection","conversation":[{}]}\n',
+        encoding="utf-8",
+    )
+    payload = build_corpus_balance(corpus_file=corpus)
+    assert payload["ok"] is True
+    assert payload["technique_counts"]["jailbreak"] == 2
+    assert payload["technique_counts"]["tool_injection"] == 1
+    assert payload["suggested_weights"]["tool_injection"] > payload["suggested_weights"]["jailbreak"]

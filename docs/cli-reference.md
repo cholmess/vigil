@@ -48,6 +48,14 @@ vigil train verify-bundle [--bundle-file PATH] [--format text|json] [--out PATH]
 
 Verifies bundle integrity by checking packaged files against `bundle-manifest.json` SHA-256 checksums. Exits non-zero on mismatch.
 
+### `vigil train balance`
+
+```
+vigil train balance [--corpus-file PATH] [--format text|json] [--out PATH]
+```
+
+Analyzes technique imbalance in `corpus.jsonl` and outputs suggested inverse-frequency weights for training.
+
 ## `vigil network`
 
 Network snapshot sync commands.

@@ -18,6 +18,7 @@ from vigil.network.intel import (
 )
 from vigil.network.corpus import (
     build_corpus_stats,
+    build_corpus_balance,
     build_train_bundle_manifest,
     export_corpus_jsonl,
     package_train_bundle,
@@ -45,6 +46,7 @@ __all__ = [
     "build_threat_alert",
     "build_threat_feed",
     "build_corpus_stats",
+    "build_corpus_balance",
     "build_train_bundle_manifest",
     "export_corpus_jsonl",
     "package_train_bundle",

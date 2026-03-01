@@ -421,3 +421,66 @@ def verify_train_bundle(
         "mismatched_files": mismatched,
         "errors": errors,
     }
+
+
+def build_corpus_balance(
+    *,
+    corpus_file: str | Path = ".vigil-data/train/corpus.jsonl",
+) -> dict[str, Any]:
+    """Analyze corpus class balance and suggest inverse-frequency weights."""
+    path = Path(corpus_file)
+    if not path.exists():
+        return {
+            "ok": False,
+            "corpus_file": str(path),
+            "rows": 0,
+            "technique_counts": {},
+            "suggested_weights": {},
+            "errors": [f"file_not_found:{path}"],
+        }
+
+    counts = Counter()
+    rows = 0
+    errors: list[str] = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        raw = line.strip()
+        if not raw:
+            continue
+        rows += 1
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            errors.append(f"line_{lineno}:invalid_json")
+            continue
+        technique = str((data or {}).get("technique") or "unknown").strip().lower()
+        counts[technique] += 1
+
+    if not counts:
+        return {
+            "ok": False,
+            "corpus_file": str(path),
+            "rows": rows,
+            "technique_counts": {},
+            "suggested_weights": {},
+            "errors": errors or ["no_technique_rows"],
+        }
+
+    total = sum(counts.values())
+    n_classes = len(counts)
+    raw_weights = {k: (total / (n_classes * v)) for k, v in counts.items()}
+    max_w = max(raw_weights.values()) if raw_weights else 1.0
+    norm_weights = {k: round(v / max_w, 4) for k, v in raw_weights.items()}
+
+    dominant = max(counts.values())
+    minority = min(counts.values())
+    imbalance_ratio = round((dominant / minority), 2) if minority > 0 else None
+
+    return {
+        "ok": True,
+        "corpus_file": str(path),
+        "rows": rows,
+        "technique_counts": dict(sorted(counts.items())),
+        "suggested_weights": dict(sorted(norm_weights.items())),
+        "imbalance_ratio": imbalance_ratio,
+        "errors": errors[:50],
+    }

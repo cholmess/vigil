@@ -45,6 +45,7 @@ from vigil.network.exchange import (
 )
 from vigil.network.corpus import (
     build_corpus_stats,
+    build_corpus_balance,
     build_train_bundle_manifest,
     export_corpus_jsonl,
     package_train_bundle,
@@ -2402,6 +2403,41 @@ def train_verify_bundle(
             typer.echo(f"  Errors: {payload['errors']}")
 
     if not payload["ok"]:
+        raise typer.Exit(code=1)
+
+
+@train_app.command("balance")
+def train_balance(
+    corpus_file: Path = typer.Option(
+        Path(".vigil-data/train/corpus.jsonl"),
+        "--corpus-file",
+        help="Corpus JSONL file to analyze.",
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for balance payload."),
+) -> None:
+    """Analyze corpus imbalance and suggest technique weights for training."""
+    payload = build_corpus_balance(corpus_file=corpus_file)
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Balance report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Balance")
+        typer.echo(f"  Corpus: {corpus_file}")
+        typer.echo(f"  Rows: {payload.get('rows', 0)}")
+        if payload.get("imbalance_ratio") is not None:
+            typer.echo(f"  Imbalance ratio: {payload['imbalance_ratio']}x")
+        typer.echo(f"  Technique counts: {payload.get('technique_counts', {})}")
+        typer.echo(f"  Suggested weights: {payload.get('suggested_weights', {})}")
+        if payload.get("errors"):
+            typer.echo(f"  Errors: {payload['errors']}")
+
+    if not payload.get("ok", False):
         raise typer.Exit(code=1)
 
 
