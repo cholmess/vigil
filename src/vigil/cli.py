@@ -42,6 +42,7 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
+from vigil.network.corpus import export_corpus_jsonl
 from vigil.network.intel import class_trends, load_manifest_records, technique_trends
 from vigil.network.sanitizer import sanitize_snapshot_file
 
@@ -1608,6 +1609,52 @@ def network_intel(
             typer.echo(f"    vigil network pull --class {top_class}")
             typer.echo("    vigil test --network --prompt-file <file>")
             typer.echo("    vigil heal --intelligent --network --prompt-file <file>")
+
+
+@network_app.command("export-corpus")
+def network_export_corpus(
+    out: Path = typer.Option(
+        Path(".vigil-data/network/corpus/corpus.jsonl"),
+        "--out",
+        help="Output JSONL file path.",
+    ),
+    since: Optional[str] = typer.Option(
+        None,
+        "--since",
+        help="Export only snapshots submitted on/after this date.",
+        show_default=False,
+    ),
+    framework: Optional[str] = typer.Option(
+        None,
+        "--framework",
+        help="Filter exported rows by framework tag.",
+        show_default=False,
+    ),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--class",
+        help="Filter exported rows by attack class tag.",
+        show_default=False,
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Export local exchange snapshots as training-ready JSONL corpus."""
+    out_path, rows = export_corpus_jsonl(
+        network_dir=network_dir,
+        out_file=out,
+        since=since,
+        framework=framework,
+        attack_class=attack_class,
+    )
+    if rows == 0:
+        typer.echo(typer.style("No rows exported (no matching snapshots).", fg="yellow"))
+        return
+    typer.echo(typer.style(f"Exported corpus rows: {rows}", fg="green"))
+    typer.echo(f"  File: {out_path}")
 
 
 # --------------------------------------------------------------------------- #
