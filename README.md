@@ -45,6 +45,7 @@ vigil network sanitize --in ./tests/attacks --out ./.vigil-data/network/sanitize
 vigil network push ./.vigil-data/network/sanitized/inc-abc123.bp.json --framework langchain --attack-class tool-result-injection
 vigil network pull --since 2026-01-01 --framework langchain --class tool-result-injection
 vigil network intel --days 7 --prompt-file system_prompt.txt
+vigil network intel --format json --out ./.vigil-data/network/intel/latest.json
 vigil network export-corpus --out ./.vigil-data/network/corpus/corpus.jsonl
 vigil network digest --prompt-file system_prompt.txt
 

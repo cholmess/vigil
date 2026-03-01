@@ -110,6 +110,11 @@ class LogFormat(str, Enum):
     langsmith = "langsmith"  # alias → otel parser for now
 
 
+class ReportFormat(str, Enum):
+    text = "text"
+    json = "json"
+
+
 def _status_color(status: str) -> str:
     colors = {"ALLOW": "green", "WARN": "yellow", "BLOCK": "red"}
     return typer.style(f"[{status:<5}]", fg=colors.get(status, "white"), bold=True)
@@ -1493,6 +1498,8 @@ def network_push(
 @network_app.command("intel")
 def network_intel(
     days: int = typer.Option(7, "--days", help="Comparison window in days."),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for report payload."),
     prompt: Optional[str] = typer.Option(
         None,
         "--prompt",
@@ -1527,39 +1534,23 @@ def network_intel(
         return
 
     trends = technique_trends(records, days=days)
+    class_rows = [row for row in class_trends(records, days=days) if row["current"] > 0]
     if not trends:
         typer.echo(typer.style("No trend data available for the selected period.", fg="yellow"))
         return
 
-    _echo_sep("Vigil Threat Intel")
-    typer.echo(f"  Window: last {days} days vs previous {days} days")
-    typer.echo(f"  Records: {len(records)}")
-    _echo_sep()
+    report_payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "window_days": days,
+        "records": len(records),
+        "technique_trends": trends,
+        "class_trends": class_rows,
+    }
+
+    shield_block: dict | None = None
 
     top = [row for row in trends if row["current"] > 0][:5]
-    if not top:
-        typer.echo("  No current-period activity.")
-        return
-
-    class_rows = [row for row in class_trends(records, days=days) if row["current"] > 0]
-    if class_rows:
-        typer.echo("")
-        typer.echo("Trending classes:")
-        for row in class_rows[:3]:
-            arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
-            typer.echo(
-                f"  {row['attack_class']:<24} current={row['current']:<3} "
-                f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
-            )
-
     top_class = class_rows[0]["attack_class"] if class_rows else None
-
-    for row in top:
-        arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
-        typer.echo(
-            f"  {row['technique']:<16} current={row['current']:<3} "
-            f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
-        )
 
     if prompt or prompt_file:
         if prompt and prompt_file:
@@ -1601,15 +1592,60 @@ def network_intel(
         allowed = int(summary["allowed"])
         blocked = int(summary["blocked"])
         pct = round((allowed / total) * 100, 2) if total else 0.0
+        shield_block = {
+            "attack_class": top_class,
+            "allowed": allowed,
+            "total": total,
+            "percent": pct,
+            "blocked": blocked,
+        }
+        report_payload["shield_score"] = shield_block
 
+        if format == ReportFormat.text:
+            typer.echo("")
+            typer.echo(f"Your shield score against class '{top_class}': {allowed}/{total} ({pct}%)")
+            if blocked > 0:
+                typer.echo(f"  {blocked} attacks still succeed.")
+                typer.echo("  Run:")
+                typer.echo(f"    vigil network pull --class {top_class}")
+                typer.echo("    vigil test --network --prompt-file <file>")
+                typer.echo("    vigil heal --intelligent --network --prompt-file <file>")
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(report_payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Intel report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
+
+    _echo_sep("Vigil Threat Intel")
+    typer.echo(f"  Window: last {days} days vs previous {days} days")
+    typer.echo(f"  Records: {len(records)}")
+    _echo_sep()
+
+    if not top:
+        typer.echo("  No current-period activity.")
+        return
+
+    if class_rows:
         typer.echo("")
-        typer.echo(f"Your shield score against class '{top_class}': {allowed}/{total} ({pct}%)")
-        if blocked > 0:
-            typer.echo(f"  {blocked} attacks still succeed.")
-            typer.echo("  Run:")
-            typer.echo(f"    vigil network pull --class {top_class}")
-            typer.echo("    vigil test --network --prompt-file <file>")
-            typer.echo("    vigil heal --intelligent --network --prompt-file <file>")
+        typer.echo("Trending classes:")
+        for row in class_rows[:3]:
+            arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
+            typer.echo(
+                f"  {row['attack_class']:<24} current={row['current']:<3} "
+                f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
+            )
+
+    for row in top:
+        arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
+        typer.echo(
+            f"  {row['technique']:<16} current={row['current']:<3} "
+            f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
+        )
 
 
 @network_app.command("export-corpus")

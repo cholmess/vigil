@@ -127,3 +127,25 @@ def class_trends(
         )
     trends.sort(key=lambda r: (r["delta"], r["current"]), reverse=True)
     return trends
+
+
+def build_intel_report(
+    records: list[dict[str, Any]],
+    *,
+    days: int = 7,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a normalized threat-intel report payload."""
+    t_trends = technique_trends(records, days=days, now=now)
+    c_trends = class_trends(records, days=days, now=now)
+    top_technique = next((r["technique"] for r in t_trends if r["current"] > 0), None)
+    top_class = next((r["attack_class"] for r in c_trends if r["current"] > 0), None)
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "window_days": days,
+        "records": len(records),
+        "top_technique": top_technique,
+        "top_class": top_class,
+        "technique_trends": t_trends,
+        "class_trends": c_trends,
+    }

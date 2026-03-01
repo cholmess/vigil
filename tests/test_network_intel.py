@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from vigil.network.intel import class_trends, load_manifest_records, technique_trends
+from vigil.network.intel import build_intel_report, class_trends, load_manifest_records, technique_trends
 
 
 def _write_manifest(path: Path, rows: list[dict]) -> None:
@@ -56,3 +56,14 @@ def test_class_trends_computes_delta(tmp_path: Path) -> None:
     assert by_name["tool-result-injection"]["current"] == 1
     assert by_name["tool-result-injection"]["previous"] == 1
     assert by_name["tool-result-injection"]["delta"] == 0
+
+
+def test_build_intel_report_includes_top_fields() -> None:
+    records = [
+        {"technique": "jailbreak", "attack_class": "tool-result-injection", "submitted_at": "2026-03-14T00:00:00Z"},
+        {"technique": "jailbreak", "attack_class": "tool-result-injection", "submitted_at": "2026-03-13T00:00:00Z"},
+    ]
+    report = build_intel_report(records, days=7, now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+    assert report["records"] == 2
+    assert report["top_technique"] == "jailbreak"
+    assert report["top_class"] == "tool-result-injection"
