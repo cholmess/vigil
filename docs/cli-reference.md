@@ -14,6 +14,14 @@ vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--c
 
 Builds a training-ready corpus bundle (`corpus.jsonl` + `prepare-report.json`) from exchange snapshots.
 
+### `vigil train stats`
+
+```
+vigil train stats [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--format text|json] [--out PATH]
+```
+
+Shows corpus readiness stats from exchange history: total records, time range, techniques, severities, classes, frameworks, and anonymized organization coverage.
+
 ## `vigil network`
 
 Network snapshot sync commands.

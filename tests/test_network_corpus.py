@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, BreakPointTest, Canary, Message, SnapshotMetadata
-from vigil.network.corpus import export_corpus_jsonl
+from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
 from vigil.network.exchange import store_exchange_snapshot
 
 
@@ -67,3 +67,28 @@ def test_export_corpus_jsonl_respects_framework_filter(tmp_path: Path) -> None:
         framework="langchain",
     )
     assert rows == 1
+
+
+def test_build_corpus_stats_summarizes_records(tmp_path: Path) -> None:
+    network = tmp_path / "network"
+    s1 = _snapshot(tmp_path, "a", tags=["framework:langchain", "class:tool-result-injection"])
+    s2 = _snapshot(tmp_path, "b", tags=["framework:langgraph", "class:other"])
+    store_exchange_snapshot(s1, network_dir=network)
+    store_exchange_snapshot(s2, network_dir=network)
+
+    payload = build_corpus_stats(network_dir=network)
+    assert payload["total_records"] == 2
+    assert payload["distributions"]["techniques"]["tool_injection"] == 2
+    assert payload["distributions"]["frameworks"]["langchain"] == 1
+
+
+def test_build_corpus_stats_respects_class_filter(tmp_path: Path) -> None:
+    network = tmp_path / "network"
+    s1 = _snapshot(tmp_path, "a", tags=["framework:langchain", "class:tool-result-injection"])
+    s2 = _snapshot(tmp_path, "b", tags=["framework:langgraph", "class:other"])
+    store_exchange_snapshot(s1, network_dir=network)
+    store_exchange_snapshot(s2, network_dir=network)
+
+    payload = build_corpus_stats(network_dir=network, attack_class="tool-result-injection")
+    assert payload["total_records"] == 1
+    assert payload["distributions"]["attack_classes"]["tool-result-injection"] == 1

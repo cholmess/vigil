@@ -43,7 +43,7 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
-from vigil.network.corpus import export_corpus_jsonl
+from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import build_threat_alert, class_trends, load_manifest_records, technique_trends
 from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
@@ -2001,6 +2001,73 @@ def train_prepare(
     typer.echo(f"  Corpus: {out_path}")
     typer.echo(f"  Report: {report_file}")
     typer.echo(f"  Rows:   {rows}")
+
+
+@train_app.command("stats")
+def train_stats(
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+    since: Optional[str] = typer.Option(
+        None,
+        "--since",
+        help="Include only snapshots submitted on/after this date.",
+        show_default=False,
+    ),
+    framework: Optional[str] = typer.Option(
+        None,
+        "--framework",
+        help="Filter corpus stats by framework tag.",
+        show_default=False,
+    ),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--class",
+        help="Filter corpus stats by attack class tag.",
+        show_default=False,
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for stats payload."),
+) -> None:
+    """Show aggregate corpus stats for model training readiness."""
+    payload = build_corpus_stats(
+        network_dir=network_dir,
+        since=since,
+        framework=framework,
+        attack_class=attack_class,
+    )
+    if payload["total_records"] == 0:
+        typer.echo(typer.style("No corpus records available for the selected filters.", fg="yellow"))
+        return
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Corpus stats written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
+
+    dist = payload["distributions"]
+    time_range = payload["time_range"]
+    orgs = payload["organizations"]
+    _echo_sep("Vigil Corpus Stats")
+    typer.echo(f"  Records: {payload['total_records']}")
+    typer.echo(
+        "  Time range: "
+        f"{time_range.get('first_submitted_at') or 'n/a'}"
+        f" -> {time_range.get('last_submitted_at') or 'n/a'}"
+    )
+    typer.echo(f"  Known org refs: {orgs.get('known_org_refs', 0)}")
+    typer.echo("")
+    typer.echo(f"  Techniques: {dist['techniques']}")
+    typer.echo(f"  Severities: {dist['severities']}")
+    typer.echo(f"  Classes:    {dist['attack_classes']}")
+    typer.echo(f"  Frameworks: {dist['frameworks']}")
 
 
 @network_app.command("remote-pull")

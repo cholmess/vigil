@@ -190,3 +190,59 @@ def test_network_alert_json_out_writes_payload(monkeypatch, tmp_path: Path) -> N
         payload = json.loads(out.read_text(encoding="utf-8"))
         assert payload["attack_class"] == "tool-result-injection"
         assert payload["organizations_affected"] == 8
+
+
+def test_train_stats_text_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_stats",
+        lambda network_dir, since=None, framework=None, attack_class=None: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "filters": {"since": since, "framework": framework, "attack_class": attack_class},
+            "total_records": 5,
+            "time_range": {
+                "first_submitted_at": "2026-03-01T00:00:00Z",
+                "last_submitted_at": "2026-03-20T00:00:00Z",
+            },
+            "distributions": {
+                "techniques": {"indirect_rag": 3, "tool_injection": 2},
+                "severities": {"critical": 2, "high": 3},
+                "attack_classes": {"tool-result-injection": 5},
+                "frameworks": {"langchain": 4, "langgraph": 1},
+            },
+            "organizations": {"known_org_refs": 2},
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        result = runner.invoke(app, ["train", "stats"])
+        assert result.exit_code == 0
+        assert "Records: 5" in result.output
+        assert "Known org refs: 2" in result.output
+
+
+def test_train_stats_json_out_writes_payload(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_stats",
+        lambda network_dir, since=None, framework=None, attack_class=None: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "filters": {"since": since, "framework": framework, "attack_class": attack_class},
+            "total_records": 1,
+            "time_range": {
+                "first_submitted_at": "2026-03-19T00:00:00Z",
+                "last_submitted_at": "2026-03-19T00:00:00Z",
+            },
+            "distributions": {
+                "techniques": {"tool_injection": 1},
+                "severities": {"high": 1},
+                "attack_classes": {"tool-result-injection": 1},
+                "frameworks": {"langchain": 1},
+            },
+            "organizations": {"known_org_refs": 1},
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("stats.json")
+        result = runner.invoke(app, ["train", "stats", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["total_records"] == 1
