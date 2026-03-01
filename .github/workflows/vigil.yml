@@ -1,0 +1,21 @@
+name: LLM Safety Gate
+
+on:
+  pull_request:
+
+jobs:
+  vigil:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Vigil Gate
+        uses: ./.github/actions/vigil-test
+        with:
+          prompt-file: system_prompt.txt
+          attacks-dir: tests/attacks
+          report: "true"
+          diff-aware: "true"

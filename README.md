@@ -116,6 +116,8 @@ jobs:
           diff-aware: "true"
 ```
 
+A ready-to-use workflow is also included at `.github/workflows/vigil.yml`.
+
 ## Forensic audit workflow
 
 ```bash
