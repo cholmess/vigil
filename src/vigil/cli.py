@@ -45,6 +45,7 @@ from vigil.network.exchange import (
 from vigil.network.corpus import export_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import class_trends, load_manifest_records, technique_trends
+from vigil.network.sync import export_exchange_bundle, import_exchange_bundle
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -1748,6 +1749,44 @@ def network_digest(
         typer.echo(f"{total} new network attacks pulled — {affected} affect your current prompt.")
         if affected > 0:
             typer.echo("Run `vigil heal --intelligent --network --prompt-file <file>` to prioritize fixes.")
+
+
+@network_app.command("export-exchange")
+def network_export_exchange(
+    out: Path = typer.Option(
+        Path(".vigil-data/network/export"),
+        "--out",
+        help="Directory to write exchange export bundle.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Export local exchange manifest + snapshots for private sharing."""
+    path, copied = export_exchange_bundle(network_dir=network_dir, out_dir=out)
+    typer.echo(typer.style(f"Exchange export ready ({copied} snapshots).", fg="green"))
+    typer.echo(f"  Path: {path}")
+
+
+@network_app.command("import-exchange")
+def network_import_exchange(
+    source: Path = typer.Option(..., "--in", help="Directory containing exchange export bundle."),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Import and merge a private exchange bundle."""
+    if not source.exists():
+        typer.echo(typer.style(f"Error: source directory not found: {source}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    result = import_exchange_bundle(source_dir=source, network_dir=network_dir)
+    typer.echo(typer.style("Exchange import completed.", fg="green"))
+    typer.echo(f"  Imported: {result['imported']}")
+    typer.echo(f"  Skipped:  {result['skipped']}")
 
 
 # --------------------------------------------------------------------------- #

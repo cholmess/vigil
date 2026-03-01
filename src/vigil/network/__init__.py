@@ -12,6 +12,7 @@ from vigil.network.intel import build_intel_report, class_trends, load_manifest_
 from vigil.network.corpus import export_corpus_jsonl
 from vigil.network.sanitizer import sanitize_snapshot, sanitize_snapshot_file
 from vigil.network.digest import summarize_pulled_snapshots
+from vigil.network.sync import export_exchange_bundle, import_exchange_bundle
 
 __all__ = [
     "sanitize_snapshot",
@@ -28,4 +29,6 @@ __all__ = [
     "build_intel_report",
     "export_corpus_jsonl",
     "summarize_pulled_snapshots",
+    "export_exchange_bundle",
+    "import_exchange_bundle",
 ]

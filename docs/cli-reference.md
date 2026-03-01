@@ -66,6 +66,22 @@ vigil network digest [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT]
 
 Shows a summary of pulled snapshots and, when a prompt is provided, how many currently succeed (`BLOCK`) against that prompt.
 
+### `vigil network export-exchange`
+
+```
+vigil network export-exchange [--out DIR]
+```
+
+Exports local exchange manifest + snapshots for private team sharing.
+
+### `vigil network import-exchange`
+
+```
+vigil network import-exchange --in DIR
+```
+
+Imports an exported exchange bundle and merges new records by `network_id`.
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.

@@ -48,6 +48,8 @@ vigil network intel --days 7 --prompt-file system_prompt.txt
 vigil network intel --format json --out ./.vigil-data/network/intel/latest.json
 vigil network export-corpus --out ./.vigil-data/network/corpus/corpus.jsonl
 vigil network digest --prompt-file system_prompt.txt
+vigil network export-exchange --out ./.vigil-data/network/export
+vigil network import-exchange --in ./.vigil-data/network/export
 
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt
