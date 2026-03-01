@@ -297,6 +297,7 @@ class TestCommunityAttacksReplay:
         for f in attacks_dir.glob("*.bp.json"):
             snap = AttackSnapshot.load_from_file(f)
             assert snap.metadata.source == "community"
+            assert snap.metadata.technique.value != "unknown"
             assert snap.snapshot_type == "attack"
             assert len(snap.attack.conversation) >= 2
             assert snap.breakpoint_test is not None

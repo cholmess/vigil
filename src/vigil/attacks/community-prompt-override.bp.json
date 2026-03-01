@@ -8,6 +8,7 @@
     "source": "community",
     "source_version": "1.0",
     "severity": "medium",
+    "technique": "jailbreak",
     "tags": ["prompt_injection", "system_prompt_override", "community"]
   },
   "origin": {

@@ -8,6 +8,7 @@
     "source": "community",
     "source_version": "1.0",
     "severity": "critical",
+    "technique": "tool_injection",
     "tags": ["data_exfiltration", "url_injection", "community"]
   },
   "origin": {

@@ -8,6 +8,7 @@
     "source": "community",
     "source_version": "1.0",
     "severity": "high",
+    "technique": "prompt_leakage",
     "tags": [
       "prompt_injection",
       "context_dump",

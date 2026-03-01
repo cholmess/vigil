@@ -8,6 +8,7 @@
     "source": "community",
     "source_version": "1.0",
     "severity": "critical",
+    "technique": "indirect_rag",
     "tags": [
       "prompt_injection",
       "indirect_injection",
