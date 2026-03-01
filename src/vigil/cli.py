@@ -45,7 +45,9 @@ from vigil.network.exchange import (
 )
 from vigil.network.corpus import (
     build_corpus_stats,
+    build_train_bundle_manifest,
     export_corpus_jsonl,
+    package_train_bundle,
     split_corpus_jsonl,
     validate_corpus_jsonl,
 )
@@ -2338,6 +2340,31 @@ def train_validate(
 
     if not payload["ok"]:
         raise typer.Exit(code=1)
+
+
+@train_app.command("package")
+def train_package(
+    train_dir: Path = typer.Option(
+        Path(".vigil-data/train"),
+        "--train-dir",
+        help="Directory containing training artifacts.",
+    ),
+    out: Path = typer.Option(
+        Path(".vigil-data/train/train-bundle.tar.gz"),
+        "--out",
+        help="Output bundle tar.gz path.",
+    ),
+) -> None:
+    """Package training artifacts into a portable bundle with checksums."""
+    manifest = build_train_bundle_manifest(train_dir=train_dir)
+    if not manifest["files"]:
+        typer.echo(typer.style("No training artifacts found to package.", fg="yellow"))
+        raise typer.Exit(code=1)
+    bundle, manifest_path = package_train_bundle(train_dir=train_dir, out_file=out)
+    typer.echo(typer.style("Training bundle packaged.", fg="green"))
+    typer.echo(f"  Bundle:   {bundle}")
+    typer.echo(f"  Manifest: {manifest_path}")
+    typer.echo(f"  Files:    {len(manifest['files'])}")
 
 
 @network_app.command("remote-pull")

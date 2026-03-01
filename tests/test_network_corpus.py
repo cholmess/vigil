@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import tarfile
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, BreakPointTest, Canary, Message, SnapshotMetadata
 from vigil.network.corpus import (
     build_corpus_stats,
+    build_train_bundle_manifest,
     export_corpus_jsonl,
+    package_train_bundle,
     split_corpus_jsonl,
     validate_corpus_jsonl,
 )
@@ -121,3 +124,23 @@ def test_validate_corpus_jsonl_flags_missing_fields(tmp_path: Path) -> None:
     assert payload["rows"] == 2
     assert payload["invalid_rows"] == 2
     assert payload["ok"] is False
+
+
+def test_package_train_bundle_writes_manifest_and_tar(tmp_path: Path) -> None:
+    train_dir = tmp_path / "train"
+    train_dir.mkdir(parents=True, exist_ok=True)
+    (train_dir / "corpus.jsonl").write_text('{"snapshot_id":"a","technique":"jailbreak","conversation":[{}]}\n', encoding="utf-8")
+    (train_dir / "prepare-report.json").write_text('{"rows":1}', encoding="utf-8")
+
+    manifest = build_train_bundle_manifest(train_dir=train_dir)
+    assert len(manifest["files"]) >= 2
+
+    out, manifest_path = package_train_bundle(train_dir=train_dir, out_file=train_dir / "bundle.tar.gz")
+    assert out.exists()
+    assert manifest_path.exists()
+
+    with tarfile.open(out, "r:gz") as tar:
+        names = set(tar.getnames())
+    assert "corpus.jsonl" in names
+    assert "prepare-report.json" in names
+    assert "bundle-manifest.json" in names

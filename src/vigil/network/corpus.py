@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import random
+import tarfile
+import hashlib
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -273,3 +275,71 @@ def validate_corpus_jsonl(
         "invalid_rows": invalid,
         "errors": errors[:50],
     }
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def build_train_bundle_manifest(
+    *,
+    train_dir: str | Path = ".vigil-data/train",
+) -> dict[str, Any]:
+    """Build manifest (size/checksum) for standard training artifacts."""
+    root = Path(train_dir)
+    candidates = [
+        "corpus.jsonl",
+        "prepare-report.json",
+        "train.jsonl",
+        "val.jsonl",
+        "stats.json",
+        "validate.json",
+    ]
+    files: list[dict[str, Any]] = []
+    for rel in candidates:
+        path = root / rel
+        if not path.exists() or not path.is_file():
+            continue
+        files.append(
+            {
+                "path": rel,
+                "bytes": path.stat().st_size,
+                "sha256": _sha256_file(path),
+            }
+        )
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "train_dir": str(root),
+        "files": files,
+    }
+
+
+def package_train_bundle(
+    *,
+    train_dir: str | Path = ".vigil-data/train",
+    out_file: str | Path = ".vigil-data/train/train-bundle.tar.gz",
+) -> tuple[Path, Path]:
+    """Package training artifacts + checksum manifest into a tar.gz bundle."""
+    root = Path(train_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    manifest = build_train_bundle_manifest(train_dir=root)
+    manifest_path = root / "bundle-manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    output = Path(out_file)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(output, "w:gz") as tar:
+        for item in manifest["files"]:
+            rel = str(item["path"])
+            path = root / rel
+            if path.exists():
+                tar.add(path, arcname=rel)
+        tar.add(manifest_path, arcname="bundle-manifest.json")
+    return output, manifest_path

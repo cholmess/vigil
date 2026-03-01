@@ -32,6 +32,14 @@ vigil train validate [--corpus-file PATH] [--format text|json] [--out PATH]
 
 Validates `corpus.jsonl` structure for training readiness (required fields and JSON row integrity). Exits non-zero when invalid rows are found.
 
+### `vigil train package`
+
+```
+vigil train package [--train-dir DIR] [--out PATH]
+```
+
+Packages available training artifacts into a `.tar.gz` bundle and writes `bundle-manifest.json` with per-file checksums.
+
 ## `vigil network`
 
 Network snapshot sync commands.
