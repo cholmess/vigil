@@ -58,7 +58,7 @@ runs:
             exit 2
           fi
         fi
-        cmd=(vigil test --prompt-file "$prompt_file" --attacks-dir "${{ inputs.attacks-dir }}")
+        cmd=(python -m vigil test --prompt-file "$prompt_file" --attacks-dir "${{ inputs.attacks-dir }}")
         if [ "${{ inputs.report }}" = "true" ]; then
           cmd+=(--report)
         fi
