@@ -2,6 +2,18 @@
 
 All commands: `vigil <group> <command> [options]`.
 
+## `vigil train`
+
+Training bundle preparation commands.
+
+### `vigil train prepare`
+
+```
+vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--class NAME]
+```
+
+Builds a training-ready corpus bundle (`corpus.jsonl` + `prepare-report.json`) from exchange snapshots.
+
 ## `vigil network`
 
 Network snapshot sync commands.

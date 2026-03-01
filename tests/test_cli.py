@@ -11,6 +11,8 @@ pytest.importorskip("typer")
 from typer.testing import CliRunner
 
 from vigil.cli import app
+from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
+from vigil.network.exchange import store_exchange_snapshot
 
 
 runner = CliRunner()
@@ -110,3 +112,28 @@ def test_vigil_test_network_uses_network_cache_dir(monkeypatch, tmp_path: Path) 
         assert called["attacks_dir"] == str(cache)
         assert "Shield score:" in result.output
         assert "23 new attacks tested since last sync" in result.output
+
+
+def test_train_prepare_writes_bundle(tmp_path: Path) -> None:
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        network = Path(".vigil-data/network")
+        network.mkdir(parents=True, exist_ok=True)
+
+        snap = AttackSnapshot(
+            vigil_version="0.1.0",
+            metadata=SnapshotMetadata(
+                snapshot_id="train-a",
+                source="community",
+                severity="high",
+                technique="jailbreak",
+            ),
+            canary=Canary(token_type="api_key"),
+            attack=Attack(conversation=[Message(role="user", content="attack")]),
+        )
+        snap_path = snap.save_to_file(Path("train-a"))
+        store_exchange_snapshot(snap_path, network_dir=network)
+
+        result = runner.invoke(app, ["train", "prepare", "--out-dir", ".vigil-data/train"])
+        assert result.exit_code == 0
+        assert Path(".vigil-data/train/corpus.jsonl").exists()
+        assert Path(".vigil-data/train/prepare-report.json").exists()

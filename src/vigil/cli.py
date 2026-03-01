@@ -63,6 +63,13 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+train_app = typer.Typer(
+    name="train",
+    help="Training data preparation utilities.",
+    no_args_is_help=True,
+)
+app.add_typer(train_app, name="train")
+
 # --------------------------------------------------------------------------- #
 # vigil network  (sub-app)                                                    #
 # --------------------------------------------------------------------------- #
@@ -1805,6 +1812,74 @@ def network_import_exchange(
     typer.echo(typer.style("Exchange import completed.", fg="green"))
     typer.echo(f"  Imported: {result['imported']}")
     typer.echo(f"  Skipped:  {result['skipped']}")
+
+
+@train_app.command("prepare")
+def train_prepare(
+    out_dir: Path = typer.Option(
+        Path(".vigil-data/train"),
+        "--out-dir",
+        help="Directory for training bundle artifacts.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+    since: Optional[str] = typer.Option(
+        None,
+        "--since",
+        help="Include only snapshots submitted on/after this date.",
+        show_default=False,
+    ),
+    framework: Optional[str] = typer.Option(
+        None,
+        "--framework",
+        help="Filter training corpus by framework tag.",
+        show_default=False,
+    ),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--class",
+        help="Filter training corpus by attack class tag.",
+        show_default=False,
+    ),
+) -> None:
+    """Prepare normalized corpus + metadata bundle for model training."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    corpus_file = out_dir / "corpus.jsonl"
+    report_file = out_dir / "prepare-report.json"
+
+    out_path, rows = export_corpus_jsonl(
+        network_dir=network_dir,
+        out_file=corpus_file,
+        since=since,
+        framework=framework,
+        attack_class=attack_class,
+    )
+    if rows == 0:
+        typer.echo(typer.style("No corpus rows available for the selected filters.", fg="yellow"))
+        return
+
+    records = load_manifest_records(network_dir=network_dir)
+    intel_payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rows": rows,
+        "corpus_file": str(out_path),
+        "filters": {
+            "since": since,
+            "framework": framework,
+            "attack_class": attack_class,
+        },
+        "technique_trends": technique_trends(records, days=30),
+        "class_trends": class_trends(records, days=30),
+    }
+    report_file.write_text(json.dumps(intel_payload, indent=2), encoding="utf-8")
+
+    typer.echo(typer.style("Training bundle prepared.", fg="green"))
+    typer.echo(f"  Corpus: {out_path}")
+    typer.echo(f"  Report: {report_file}")
+    typer.echo(f"  Rows:   {rows}")
 
 
 @network_app.command("remote-pull")
