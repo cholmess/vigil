@@ -178,6 +178,10 @@ if any(r.status == "BLOCK" for r in results):
 - [Integration Guide](docs/integration-guide.md) — Python API usage
 - [Quickstart](docs/quickstart.md) — 10-minute walkthrough
 
+Framework examples:
+
+- [examples/frameworks/README.md](examples/frameworks/README.md)
+
 ## Related Tools
 
 - [BreakPoint](https://github.com/cholmess/breakpoint-ai) — catch regressions before you ship

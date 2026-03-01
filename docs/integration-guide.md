@@ -29,6 +29,13 @@ if snap_path:
     logger.warning("attack snapshot: %s", snap_path)
 ```
 
+Framework quickstarts in this repo:
+
+- `examples/frameworks/langchain_quickstart.py`
+- `examples/frameworks/langgraph_swarm_quickstart.py`
+- `examples/frameworks/openai_assistants_quickstart.py`
+- `examples/frameworks/anthropic_quickstart.py`
+
 ### FastAPI example
 
 ```python
