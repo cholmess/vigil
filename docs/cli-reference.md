@@ -56,6 +56,14 @@ vigil train balance [--corpus-file PATH] [--format text|json] [--out PATH]
 
 Analyzes technique imbalance in `corpus.jsonl` and outputs suggested inverse-frequency weights for training.
 
+### `vigil train doctor`
+
+```
+vigil train doctor [--corpus-file PATH] [--network-dir DIR] [--max-imbalance N] [--format text|json] [--out PATH]
+```
+
+Runs a combined readiness diagnosis (`validate` + `balance` + `stats`) and exits non-zero if corpus quality fails or imbalance exceeds the configured threshold.
+
 ## `vigil network`
 
 Network snapshot sync commands.

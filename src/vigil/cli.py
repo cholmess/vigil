@@ -2441,6 +2441,65 @@ def train_balance(
         raise typer.Exit(code=1)
 
 
+@train_app.command("doctor")
+def train_doctor(
+    corpus_file: Path = typer.Option(
+        Path(".vigil-data/train/corpus.jsonl"),
+        "--corpus-file",
+        help="Corpus JSONL file to diagnose.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory for trend/context stats.",
+    ),
+    max_imbalance: float = typer.Option(
+        5.0,
+        "--max-imbalance",
+        help="Maximum allowed technique imbalance ratio before failing.",
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for doctor payload."),
+) -> None:
+    """Run a combined training-readiness diagnosis over corpus quality and balance."""
+    validation = validate_corpus_jsonl(corpus_file=corpus_file)
+    balance = build_corpus_balance(corpus_file=corpus_file)
+    stats = build_corpus_stats(network_dir=network_dir)
+
+    imbalance_ratio = balance.get("imbalance_ratio")
+    imbalance_ok = (imbalance_ratio is None) or (float(imbalance_ratio) <= float(max_imbalance))
+    ok = bool(validation.get("ok")) and bool(balance.get("ok")) and imbalance_ok
+    payload = {
+        "ok": ok,
+        "max_imbalance": max_imbalance,
+        "validation": validation,
+        "balance": balance,
+        "stats": stats,
+    }
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Doctor report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Doctor")
+        typer.echo(f"  Corpus rows: {validation.get('rows', 0)}")
+        typer.echo(f"  Invalid rows: {validation.get('invalid_rows', 0)}")
+        typer.echo(f"  Imbalance ratio: {imbalance_ratio if imbalance_ratio is not None else 'n/a'}")
+        typer.echo(f"  Max allowed imbalance: {max_imbalance}")
+        typer.echo(f"  Network records: {stats.get('total_records', 0)}")
+        typer.echo(f"  Status: {'PASS' if ok else 'FAIL'}")
+        if not imbalance_ok and imbalance_ratio is not None:
+            typer.echo(f"  Reason: imbalance_ratio {imbalance_ratio} > {max_imbalance}")
+
+    if not ok:
+        raise typer.Exit(code=1)
+
+
 @network_app.command("remote-pull")
 def network_remote_pull(
     repo: str = typer.Option(..., "--repo", help="Remote git repository URL/path containing exchange/"),

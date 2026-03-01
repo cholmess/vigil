@@ -276,6 +276,40 @@ def test_train_balance_json_output(monkeypatch, tmp_path: Path) -> None:
         assert payload["suggested_weights"]["tool_injection"] == 1.0
 
 
+def test_train_doctor_json_output_pass(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.validate_corpus_jsonl", lambda corpus_file: {"ok": True, "rows": 10, "invalid_rows": 0, "errors": []})
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_balance",
+        lambda corpus_file: {"ok": True, "rows": 10, "imbalance_ratio": 2.0, "technique_counts": {}, "suggested_weights": {}, "errors": []},
+    )
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_stats",
+        lambda network_dir: {"total_records": 50, "distributions": {}, "time_range": {}, "organizations": {}},
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("doctor.json")
+        result = runner.invoke(app, ["train", "doctor", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+
+
+def test_train_doctor_fails_on_high_imbalance(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.validate_corpus_jsonl", lambda corpus_file: {"ok": True, "rows": 10, "invalid_rows": 0, "errors": []})
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_balance",
+        lambda corpus_file: {"ok": True, "rows": 10, "imbalance_ratio": 8.0, "technique_counts": {}, "suggested_weights": {}, "errors": []},
+    )
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_stats",
+        lambda network_dir: {"total_records": 50, "distributions": {}, "time_range": {}, "organizations": {}},
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        result = runner.invoke(app, ["train", "doctor", "--max-imbalance", "5"])
+        assert result.exit_code == 1
+        assert "FAIL" in result.output
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

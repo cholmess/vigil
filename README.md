@@ -65,6 +65,7 @@ vigil train validate --corpus-file ./.vigil-data/train/corpus.jsonl
 vigil train package --train-dir ./.vigil-data/train --out ./.vigil-data/train/train-bundle.tar.gz
 vigil train verify-bundle --bundle-file ./.vigil-data/train/train-bundle.tar.gz
 vigil train balance --corpus-file ./.vigil-data/train/corpus.jsonl
+vigil train doctor --corpus-file ./.vigil-data/train/corpus.jsonl --max-imbalance 5
 
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt
