@@ -11,6 +11,7 @@ from vigil.network.exchange import (
 from vigil.network.intel import (
     build_intel_report,
     build_threat_alert,
+    build_threat_feed,
     class_trends,
     load_manifest_records,
     technique_trends,
@@ -34,6 +35,7 @@ __all__ = [
     "class_trends",
     "build_intel_report",
     "build_threat_alert",
+    "build_threat_feed",
     "build_corpus_stats",
     "export_corpus_jsonl",
     "summarize_pulled_snapshots",

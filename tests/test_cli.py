@@ -246,3 +246,61 @@ def test_train_stats_json_out_writes_payload(monkeypatch, tmp_path: Path) -> Non
         assert out.exists()
         payload = json.loads(out.read_text(encoding="utf-8"))
         assert payload["total_records"] == 1
+
+
+def test_network_feed_text_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.build_threat_feed",
+        lambda records, days, top=5: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "window_days": days,
+            "records": 3,
+            "top": top,
+            "alerts": [
+                {
+                    "attack_class": "tool-result-injection",
+                    "current_window_occurrences": 2,
+                    "previous_window_occurrences": 0,
+                    "delta": 2,
+                    "organizations_affected": 1,
+                    "frameworks": {"langchain": 2},
+                }
+            ],
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        result = runner.invoke(app, ["network", "feed"])
+        assert result.exit_code == 0
+        assert "Vigil Threat Feed" in result.output
+        assert "tool-result-injection" in result.output
+
+
+def test_network_feed_json_out_writes_payload(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.build_threat_feed",
+        lambda records, days, top=5: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "window_days": days,
+            "records": 1,
+            "top": top,
+            "alerts": [
+                {
+                    "attack_class": "tool-result-injection",
+                    "current_window_occurrences": 1,
+                    "previous_window_occurrences": 0,
+                    "delta": 1,
+                    "organizations_affected": 1,
+                    "frameworks": {"langchain": 1},
+                }
+            ],
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("feed.json")
+        result = runner.invoke(app, ["network", "feed", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["records"] == 1

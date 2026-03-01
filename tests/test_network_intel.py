@@ -9,6 +9,7 @@ from pathlib import Path
 from vigil.network.intel import (
     build_intel_report,
     build_threat_alert,
+    build_threat_feed,
     class_trends,
     load_manifest_records,
     technique_trends,
@@ -144,3 +145,23 @@ def test_build_threat_alert_returns_not_found_when_no_match() -> None:
     )
     assert alert["found"] is False
     assert alert["attack_class"] is None
+
+
+def test_build_threat_feed_returns_top_alerts() -> None:
+    records = [
+        {
+            "attack_class": "tool-result-injection",
+            "frameworks": ["langchain"],
+            "org_ref": "org-a",
+            "submitted_at": "2026-03-14T00:00:00Z",
+        },
+        {
+            "attack_class": "indirect-prompt-injection",
+            "frameworks": ["langgraph"],
+            "org_ref": "org-b",
+            "submitted_at": "2026-03-14T00:00:00Z",
+        },
+    ]
+    payload = build_threat_feed(records, days=7, top=1, now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+    assert payload["records"] == 2
+    assert len(payload["alerts"]) == 1

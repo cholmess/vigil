@@ -96,6 +96,14 @@ Generates an actionable alert for a rising attack class using exchange manifest 
 Includes occurrences, affected-organization count (from anonymized `org_ref`), and framework distribution.  
 When a prompt is provided, includes current shield score against snapshots from that class.
 
+### `vigil network feed`
+
+```
+vigil network feed [--days 7] [--top 5] [--format text|json] [--out PATH]
+```
+
+Builds a predictive multi-class threat feed from local exchange trends, listing the top rising attack classes with occurrence deltas, affected organizations, and frameworks.
+
 ### `vigil network export-exchange`
 
 ```

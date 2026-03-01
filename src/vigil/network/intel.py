@@ -205,3 +205,33 @@ def build_threat_alert(
         "frameworks": dict(sorted(frameworks.items())),
         "organizations_affected": len(org_refs),
     }
+
+
+def build_threat_feed(
+    records: list[dict[str, Any]],
+    *,
+    days: int = 7,
+    top: int = 5,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a multi-class predictive feed payload for rising attacks."""
+    ref = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
+    trends = class_trends(records, days=days, now=ref)
+    rising = [row for row in trends if int(row.get("current", 0)) > 0][: max(1, top)]
+    alerts = [
+        build_threat_alert(
+            records,
+            days=days,
+            attack_class=str(row.get("attack_class") or ""),
+            now=ref,
+        )
+        for row in rising
+    ]
+    alerts = [a for a in alerts if a.get("found")]
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "window_days": days,
+        "records": len(records),
+        "top": top,
+        "alerts": alerts,
+    }

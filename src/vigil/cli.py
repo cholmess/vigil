@@ -45,7 +45,13 @@ from vigil.network.exchange import (
 )
 from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
-from vigil.network.intel import build_threat_alert, class_trends, load_manifest_records, technique_trends
+from vigil.network.intel import (
+    build_threat_alert,
+    build_threat_feed,
+    class_trends,
+    load_manifest_records,
+    technique_trends,
+)
 from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
 from vigil.network.sanitizer import sanitize_snapshot_file
 
@@ -1893,6 +1899,68 @@ def network_alert(
     _echo_sep()
     typer.echo("Run:")
     typer.echo(f"  vigil network pull --class {payload['attack_class']}")
+    typer.echo("  vigil test --network --prompt-file <file>")
+    typer.echo("  vigil heal --intelligent --network --prompt-file <file>")
+
+
+@network_app.command("feed")
+def network_feed(
+    days: int = typer.Option(7, "--days", help="Comparison window in days."),
+    top: int = typer.Option(5, "--top", help="Maximum number of rising classes to include."),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for feed payload."),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Generate predictive multi-class threat feed from local exchange history."""
+    if days <= 0:
+        typer.echo(typer.style("Error: --days must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if top <= 0:
+        typer.echo(typer.style("Error: --top must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    records = load_manifest_records(network_dir=network_dir)
+    if not records:
+        typer.echo(typer.style("No exchange records available yet.", fg="yellow"))
+        return
+
+    payload = build_threat_feed(records, days=days, top=top)
+    alerts = list(payload.get("alerts") or [])
+    if not alerts:
+        typer.echo(typer.style("No rising attack classes found for the selected period.", fg="yellow"))
+        return
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Threat feed written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
+
+    _echo_sep("Vigil Threat Feed")
+    typer.echo(f"  Window: last {days} days vs previous {days} days")
+    typer.echo(f"  Records: {payload.get('records', 0)}")
+    _echo_sep()
+    for idx, alert in enumerate(alerts, start=1):
+        typer.echo(f"  [{idx}] {alert['attack_class']}")
+        typer.echo(
+            "      Occurrences: "
+            f"{alert['current_window_occurrences']} vs {alert['previous_window_occurrences']} "
+            f"(delta {alert['delta']:+d})"
+        )
+        typer.echo(f"      Organizations: {alert.get('organizations_affected', 0)}")
+        if alert.get("frameworks"):
+            typer.echo(f"      Frameworks: {alert['frameworks']}")
+    _echo_sep()
+    typer.echo("Run:")
+    typer.echo("  vigil network pull --since <date>")
     typer.echo("  vigil test --network --prompt-file <file>")
     typer.echo("  vigil heal --intelligent --network --prompt-file <file>")
 
