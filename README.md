@@ -52,6 +52,7 @@ vigil test --network --prompt-file system_prompt.txt
 
 # Suggest hardening changes for blocked attacks
 vigil heal --prompt-file system_prompt.txt
+vigil heal --intelligent --prompt-file system_prompt.txt
 
 # Multi-agent (swarm) attribution test
 vigil swarm-test \

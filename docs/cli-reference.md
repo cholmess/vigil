@@ -199,7 +199,7 @@ When `--network` is enabled, CLI output includes network shield score and the nu
 Suggests system-prompt hardening changes for attacks that still return `BLOCK`.
 
 ```
-vigil heal [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network]
+vigil heal [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network] [--intelligent]
 ```
 
 ---

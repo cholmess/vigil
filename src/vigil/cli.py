@@ -29,6 +29,10 @@ from vigil.loop.diff_aware import (
     select_snapshots_for_diff,
 )
 from vigil.loop.heal import hardening_suggestions_for_files
+from vigil.loop.heal_intelligent import (
+    estimate_shield_score_after_changes,
+    rank_suggestions_with_profile,
+)
 from vigil.loop.replayer import VigilBreakPointRunner
 from vigil.loop.swarm import run_swarm_test
 from vigil.network.exchange import (
@@ -1051,6 +1055,12 @@ def heal(
         help="Use snapshots from .vigil-data/network/pulled.",
         is_flag=True,
     ),
+    intelligent: bool = typer.Option(
+        False,
+        "--intelligent",
+        help="Rank hardening suggestions using vulnerability scorer profile.",
+        is_flag=True,
+    ),
 ) -> None:
     """Suggest hardening changes for attacks that still succeed."""
     cfg = VigilConfig.load()
@@ -1093,10 +1103,36 @@ def heal(
         typer.echo(typer.style("Blocked attacks found, but no hardening suggestions are present in those snapshots.", fg="yellow"))
         raise typer.Exit(code=1)
 
-    _echo_sep("Vigil Heal")
-    typer.echo(f"  Blocked attacks: {len(blocked_files)}")
-    typer.echo(f"  Suggestions:     {len(suggestions)}")
-    _echo_sep()
+    if intelligent:
+        scorer = VulnerabilityScorer(effective_attacks)
+        profile = scorer.assess(current_system_prompt)
+        suggestions = rank_suggestions_with_profile(suggestions, profile)
+        before, after = estimate_shield_score_after_changes(
+            total=summary["total"],
+            allowed=summary["allowed"],
+            ranked_suggestions=suggestions,
+            scorer_report=profile,
+        )
+
+        _echo_sep("Vigil Heal (intelligent)")
+        typer.echo(f"  Corpus snapshots: {profile['total_snapshots']}")
+        typer.echo("  Vulnerability profile:")
+        ordered = sorted(
+            profile["techniques"].items(),
+            key=lambda kv: float(kv[1]["probability"]),
+            reverse=True,
+        )[:4]
+        for name, info in ordered:
+            pct = round(float(info["probability"]) * 100, 1)
+            typer.echo(f"    {name}: {info['level']} ({pct}%)")
+        typer.echo("")
+        typer.echo(f"  Estimated shield score after changes: {round(before*100,1)}% -> {round(after*100,1)}%")
+        _echo_sep()
+    else:
+        _echo_sep("Vigil Heal")
+        typer.echo(f"  Blocked attacks: {len(blocked_files)}")
+        typer.echo(f"  Suggestions:     {len(suggestions)}")
+        _echo_sep()
 
     for idx, item in enumerate(suggestions, start=1):
         sev = item["severity"].upper()
