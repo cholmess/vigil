@@ -15,7 +15,7 @@ jobs:
       - name: Run Vigil Gate
         uses: ./.github/actions/vigil-test
         with:
-          prompt-file: system_prompt.txt
+          prompt-file: examples/full_loop_demo/system_prompt.txt
           attacks-dir: tests/attacks
           report: "true"
           diff-aware: "true"
