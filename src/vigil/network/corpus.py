@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -178,3 +179,46 @@ def export_corpus_jsonl(
             count += 1
 
     return out, count
+
+
+def split_corpus_jsonl(
+    *,
+    corpus_file: str | Path,
+    out_dir: str | Path,
+    val_ratio: float = 0.2,
+    seed: int = 42,
+) -> tuple[Path, Path, int, int]:
+    """
+    Split a corpus JSONL file into train/val files deterministically.
+
+    Returns `(train_path, val_path, train_rows, val_rows)`.
+    """
+    if not (0.0 < val_ratio < 1.0):
+        raise ValueError("val_ratio must be between 0 and 1.")
+
+    corpus_path = Path(corpus_file)
+    lines = [line for line in corpus_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        train_path = Path(out_dir) / "train.jsonl"
+        val_path = Path(out_dir) / "val.jsonl"
+        train_path.parent.mkdir(parents=True, exist_ok=True)
+        train_path.write_text("", encoding="utf-8")
+        val_path.write_text("", encoding="utf-8")
+        return train_path, val_path, 0, 0
+
+    rng = random.Random(seed)
+    ordered = list(lines)
+    rng.shuffle(ordered)
+    val_count = max(1, int(round(len(ordered) * val_ratio)))
+    val_rows = ordered[:val_count]
+    train_rows = ordered[val_count:]
+    if not train_rows:
+        train_rows, val_rows = ordered[1:], ordered[:1]
+
+    out_root = Path(out_dir)
+    out_root.mkdir(parents=True, exist_ok=True)
+    train_path = out_root / "train.jsonl"
+    val_path = out_root / "val.jsonl"
+    train_path.write_text("\n".join(train_rows) + ("\n" if train_rows else ""), encoding="utf-8")
+    val_path.write_text("\n".join(val_rows) + ("\n" if val_rows else ""), encoding="utf-8")
+    return train_path, val_path, len(train_rows), len(val_rows)

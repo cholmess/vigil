@@ -9,11 +9,12 @@ Training bundle preparation commands.
 ### `vigil train prepare`
 
 ```
-vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--prompt-file PATH | --prompt TEXT]
+vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--prompt-file PATH | --prompt TEXT] [--val-ratio FLOAT] [--seed N]
 ```
 
 Builds a training-ready corpus bundle (`corpus.jsonl` + `prepare-report.json`) from exchange snapshots.  
 If a prompt is provided, `prepare-report.json` also includes a vulnerability profile for prioritizing remediation/training focus.
+If `--val-ratio` is set, it also writes deterministic `train.jsonl` and `val.jsonl` splits.
 
 ### `vigil train stats`
 

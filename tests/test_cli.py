@@ -189,6 +189,37 @@ def test_train_prepare_with_prompt_embeds_vulnerability_profile(monkeypatch, tmp
         assert report["vulnerability_profile"]["top_technique"] == "tool_injection"
 
 
+def test_train_prepare_with_val_ratio_writes_split(tmp_path: Path) -> None:
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        network = Path(".vigil-data/network")
+        network.mkdir(parents=True, exist_ok=True)
+
+        for idx in range(4):
+            snap = AttackSnapshot(
+                vigil_version="0.1.0",
+                metadata=SnapshotMetadata(
+                    snapshot_id=f"train-split-{idx}",
+                    source="community",
+                    severity="high",
+                    technique="tool_injection",
+                ),
+                canary=Canary(token_type="api_key"),
+                attack=Attack(conversation=[Message(role="user", content=f"attack {idx}")]),
+            )
+            snap_path = snap.save_to_file(Path(f"train-split-{idx}"))
+            store_exchange_snapshot(snap_path, network_dir=network)
+
+        result = runner.invoke(
+            app,
+            ["train", "prepare", "--out-dir", ".vigil-data/train", "--val-ratio", "0.25", "--seed", "7"],
+        )
+        assert result.exit_code == 0
+        assert Path(".vigil-data/train/train.jsonl").exists()
+        assert Path(".vigil-data/train/val.jsonl").exists()
+        report = json.loads(Path(".vigil-data/train/prepare-report.json").read_text(encoding="utf-8"))
+        assert report["split"]["val_ratio"] == 0.25
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

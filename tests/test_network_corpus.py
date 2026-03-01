@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, BreakPointTest, Canary, Message, SnapshotMetadata
-from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
+from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl, split_corpus_jsonl
 from vigil.network.exchange import store_exchange_snapshot
 
 
@@ -92,3 +92,18 @@ def test_build_corpus_stats_respects_class_filter(tmp_path: Path) -> None:
     payload = build_corpus_stats(network_dir=network, attack_class="tool-result-injection")
     assert payload["total_records"] == 1
     assert payload["distributions"]["attack_classes"]["tool-result-injection"] == 1
+
+
+def test_split_corpus_jsonl_writes_train_and_val(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus.jsonl"
+    corpus.write_text('{"id":1}\n{"id":2}\n{"id":3}\n{"id":4}\n', encoding="utf-8")
+    train_file, val_file, train_rows, val_rows = split_corpus_jsonl(
+        corpus_file=corpus,
+        out_dir=tmp_path,
+        val_ratio=0.25,
+        seed=123,
+    )
+    assert train_file.exists()
+    assert val_file.exists()
+    assert train_rows + val_rows == 4
+    assert val_rows >= 1

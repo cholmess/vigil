@@ -16,7 +16,7 @@ from vigil.network.intel import (
     load_manifest_records,
     technique_trends,
 )
-from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
+from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl, split_corpus_jsonl
 from vigil.network.sanitizer import sanitize_snapshot, sanitize_snapshot_file
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
@@ -38,6 +38,7 @@ __all__ = [
     "build_threat_feed",
     "build_corpus_stats",
     "export_corpus_jsonl",
+    "split_corpus_jsonl",
     "summarize_pulled_snapshots",
     "export_exchange_bundle",
     "import_exchange_bundle",

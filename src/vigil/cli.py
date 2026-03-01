@@ -43,7 +43,7 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
-from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl
+from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl, split_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import (
     build_threat_alert,
@@ -2141,6 +2141,17 @@ def train_prepare(
         help="Optional prompt file to embed vulnerability profile in report.",
         show_default=False,
     ),
+    val_ratio: Optional[float] = typer.Option(
+        None,
+        "--val-ratio",
+        help="Optional validation split ratio (0-1) to write train.jsonl/val.jsonl.",
+        show_default=False,
+    ),
+    seed: int = typer.Option(
+        42,
+        "--seed",
+        help="Random seed used for deterministic train/val split.",
+    ),
 ) -> None:
     """Prepare normalized corpus + metadata bundle for model training."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2157,6 +2168,9 @@ def train_prepare(
     if rows == 0:
         typer.echo(typer.style("No corpus rows available for the selected filters.", fg="yellow"))
         return
+    if val_ratio is not None and not (0.0 < val_ratio < 1.0):
+        typer.echo(typer.style("Error: --val-ratio must be between 0 and 1.", fg="red"), err=True)
+        raise typer.Exit(code=2)
 
     profile: dict | None = None
     if prompt and prompt_file:
@@ -2191,12 +2205,31 @@ def train_prepare(
     }
     if profile is not None:
         intel_payload["vulnerability_profile"] = profile
+    if val_ratio is not None:
+        train_file, val_file, train_rows, val_rows = split_corpus_jsonl(
+            corpus_file=out_path,
+            out_dir=out_dir,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+        intel_payload["split"] = {
+            "val_ratio": val_ratio,
+            "seed": seed,
+            "train_file": str(train_file),
+            "val_file": str(val_file),
+            "train_rows": train_rows,
+            "val_rows": val_rows,
+        }
     report_file.write_text(json.dumps(intel_payload, indent=2), encoding="utf-8")
 
     typer.echo(typer.style("Training bundle prepared.", fg="green"))
     typer.echo(f"  Corpus: {out_path}")
     typer.echo(f"  Report: {report_file}")
     typer.echo(f"  Rows:   {rows}")
+    if val_ratio is not None:
+        split = intel_payload["split"]
+        typer.echo(f"  Train:  {split['train_file']} ({split['train_rows']})")
+        typer.echo(f"  Val:    {split['val_file']} ({split['val_rows']})")
 
 
 @train_app.command("stats")
