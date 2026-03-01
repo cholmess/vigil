@@ -47,6 +47,7 @@ from vigil.network.corpus import (
     build_corpus_stats,
     build_corpus_balance,
     build_train_bundle_manifest,
+    check_corpus_split,
     export_corpus_jsonl,
     package_train_bundle,
     split_corpus_jsonl,
@@ -2497,6 +2498,46 @@ def train_doctor(
             typer.echo(f"  Reason: imbalance_ratio {imbalance_ratio} > {max_imbalance}")
 
     if not ok:
+        raise typer.Exit(code=1)
+
+
+@train_app.command("check-split")
+def train_check_split(
+    train_file: Path = typer.Option(
+        Path(".vigil-data/train/train.jsonl"),
+        "--train-file",
+        help="Training split JSONL file.",
+    ),
+    val_file: Path = typer.Option(
+        Path(".vigil-data/train/val.jsonl"),
+        "--val-file",
+        help="Validation split JSONL file.",
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for split-check payload."),
+) -> None:
+    """Check train/val split integrity and snapshot-id leakage."""
+    payload = check_corpus_split(train_file=train_file, val_file=val_file)
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Split check report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Check Split")
+        typer.echo(f"  Train rows: {payload['train_rows']} ({payload['train_unique_snapshot_ids']} unique ids)")
+        typer.echo(f"  Val rows:   {payload['val_rows']} ({payload['val_unique_snapshot_ids']} unique ids)")
+        typer.echo(f"  Overlap ids: {len(payload['overlap_snapshot_ids'])}")
+        typer.echo(f"  Status: {'OK' if payload['ok'] else 'FAIL'}")
+        if payload["overlap_snapshot_ids"]:
+            typer.echo(f"  Overlap sample: {payload['overlap_snapshot_ids'][:5]}")
+        if payload["errors"]:
+            typer.echo(f"  Errors: {payload['errors'][:10]}")
+
+    if not payload["ok"]:
         raise typer.Exit(code=1)
 
 

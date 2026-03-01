@@ -12,6 +12,7 @@ from vigil.network.corpus import (
     build_corpus_stats,
     build_corpus_balance,
     build_train_bundle_manifest,
+    check_corpus_split,
     export_corpus_jsonl,
     package_train_bundle,
     split_corpus_jsonl,
@@ -196,3 +197,20 @@ def test_build_corpus_balance_suggests_weights(tmp_path: Path) -> None:
     assert payload["technique_counts"]["jailbreak"] == 2
     assert payload["technique_counts"]["tool_injection"] == 1
     assert payload["suggested_weights"]["tool_injection"] > payload["suggested_weights"]["jailbreak"]
+
+
+def test_check_corpus_split_detects_overlap(tmp_path: Path) -> None:
+    train = tmp_path / "train.jsonl"
+    val = tmp_path / "val.jsonl"
+    train.write_text(
+        '{"snapshot_id":"a","technique":"jailbreak","conversation":[{}]}\n'
+        '{"snapshot_id":"b","technique":"tool_injection","conversation":[{}]}\n',
+        encoding="utf-8",
+    )
+    val.write_text(
+        '{"snapshot_id":"b","technique":"tool_injection","conversation":[{}]}\n',
+        encoding="utf-8",
+    )
+    payload = check_corpus_split(train_file=train, val_file=val)
+    assert payload["ok"] is False
+    assert payload["overlap_snapshot_ids"] == ["b"]

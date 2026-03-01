@@ -310,6 +310,30 @@ def test_train_doctor_fails_on_high_imbalance(monkeypatch, tmp_path: Path) -> No
         assert "FAIL" in result.output
 
 
+def test_train_check_split_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.check_corpus_split",
+        lambda train_file, val_file: {
+            "ok": True,
+            "train_file": str(train_file),
+            "val_file": str(val_file),
+            "train_rows": 8,
+            "val_rows": 2,
+            "train_unique_snapshot_ids": 8,
+            "val_unique_snapshot_ids": 2,
+            "overlap_snapshot_ids": [],
+            "errors": [],
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("split-check.json")
+        result = runner.invoke(app, ["train", "check-split", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+        assert payload["train_rows"] == 8
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

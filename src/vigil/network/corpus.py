@@ -484,3 +484,54 @@ def build_corpus_balance(
         "imbalance_ratio": imbalance_ratio,
         "errors": errors[:50],
     }
+
+
+def check_corpus_split(
+    *,
+    train_file: str | Path = ".vigil-data/train/train.jsonl",
+    val_file: str | Path = ".vigil-data/train/val.jsonl",
+) -> dict[str, Any]:
+    """Validate train/val split integrity and detect snapshot leakage."""
+
+    def _load_ids(path: Path) -> tuple[set[str], int, list[str]]:
+        ids: set[str] = set()
+        rows = 0
+        errs: list[str] = []
+        if not path.exists():
+            return ids, 0, [f"file_not_found:{path}"]
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            raw = line.strip()
+            if not raw:
+                continue
+            rows += 1
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                errs.append(f"{path.name}:line_{lineno}:invalid_json")
+                continue
+            sid = str((data or {}).get("snapshot_id") or "").strip()
+            if not sid:
+                errs.append(f"{path.name}:line_{lineno}:missing_snapshot_id")
+                continue
+            ids.add(sid)
+        return ids, rows, errs
+
+    train_path = Path(train_file)
+    val_path = Path(val_file)
+    train_ids, train_rows, train_errs = _load_ids(train_path)
+    val_ids, val_rows, val_errs = _load_ids(val_path)
+    overlap = sorted(train_ids & val_ids)
+
+    errors = [*train_errs, *val_errs]
+    ok = (train_rows > 0) and (val_rows > 0) and (len(overlap) == 0) and (len(errors) == 0)
+    return {
+        "ok": ok,
+        "train_file": str(train_path),
+        "val_file": str(val_path),
+        "train_rows": train_rows,
+        "val_rows": val_rows,
+        "train_unique_snapshot_ids": len(train_ids),
+        "val_unique_snapshot_ids": len(val_ids),
+        "overlap_snapshot_ids": overlap,
+        "errors": errors[:100],
+    }

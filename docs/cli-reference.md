@@ -64,6 +64,14 @@ vigil train doctor [--corpus-file PATH] [--network-dir DIR] [--max-imbalance N] 
 
 Runs a combined readiness diagnosis (`validate` + `balance` + `stats`) and exits non-zero if corpus quality fails or imbalance exceeds the configured threshold.
 
+### `vigil train check-split`
+
+```
+vigil train check-split [--train-file PATH] [--val-file PATH] [--format text|json] [--out PATH]
+```
+
+Validates train/val split integrity and fails if `snapshot_id` values overlap between files (leakage check).
+
 ## `vigil network`
 
 Network snapshot sync commands.
