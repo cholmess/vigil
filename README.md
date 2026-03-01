@@ -50,6 +50,9 @@ vigil test --prompt-file system_prompt.txt
 # → BLOCK: still vulnerable
 vigil test --network --prompt-file system_prompt.txt
 
+# Suggest hardening changes for blocked attacks
+vigil heal --prompt-file system_prompt.txt
+
 # Week 3: diff-aware mode (fast CI loop)
 vigil test --prompt-file system_prompt.txt --diff-aware
 # → runs only snapshots relevant to prompt diff

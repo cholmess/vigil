@@ -26,6 +26,7 @@ from vigil.loop.diff_aware import (
     infer_relevant_techniques,
     select_snapshots_for_diff,
 )
+from vigil.loop.heal import hardening_suggestions_for_files
 from vigil.loop.replayer import VigilBreakPointRunner
 from vigil.network.exchange import (
     pull_exchange_snapshots,
@@ -1005,6 +1006,89 @@ def audit(
     """Deprecated alias for `vigil forensics scan`. Use that instead."""
     typer.echo(typer.style("Note: `vigil audit` is deprecated — use `vigil forensics scan`.", fg="yellow"))
     forensics_scan(logs=logs, format=format, attacks_dir=attacks_dir, registry=None, since=None, until=None)
+
+
+# --------------------------------------------------------------------------- #
+# vigil heal                                                                   #
+# --------------------------------------------------------------------------- #
+
+@app.command()
+def heal(
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Directory containing .bp.json snapshots.",
+        show_default=False,
+    ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt",
+        help="Current system prompt as an inline string.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None, "--prompt-file",
+        help="Path to a file containing the current system prompt.",
+        show_default=False,
+    ),
+    network: bool = typer.Option(
+        False,
+        "--network",
+        help="Use snapshots from .vigil-data/network/pulled.",
+        is_flag=True,
+    ),
+) -> None:
+    """Suggest hardening changes for attacks that still succeed."""
+    cfg = VigilConfig.load()
+    if network and attacks_dir is None:
+        effective_attacks = Path(".vigil-data/network/pulled")
+    else:
+        effective_attacks, _ = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    if prompt and prompt_file:
+        typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if not prompt and not prompt_file:
+        typer.echo(typer.style("Error: one of --prompt or --prompt-file is required.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if prompt_file:
+        if not prompt_file.exists():
+            typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        current_system_prompt = prompt_file.read_text(encoding="utf-8").strip()
+    else:
+        current_system_prompt = (prompt or "").strip()
+    if not current_system_prompt:
+        typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    runner = VigilBreakPointRunner()
+    try:
+        summary = runner.run_regression_suite(effective_attacks, current_system_prompt)
+    except Exception as exc:
+        typer.echo(typer.style(f"Error running heal analysis: {exc}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    blocked_files = [r["file"] for r in summary["results"] if r["status"] == "BLOCK"]
+    if not blocked_files:
+        typer.echo(typer.style("No blocked attacks. Your current prompt already neutralizes known snapshots.", fg="green"))
+        return
+
+    suggestions = hardening_suggestions_for_files(effective_attacks, blocked_files)
+    if not suggestions:
+        typer.echo(typer.style("Blocked attacks found, but no hardening suggestions are present in those snapshots.", fg="yellow"))
+        raise typer.Exit(code=1)
+
+    _echo_sep("Vigil Heal")
+    typer.echo(f"  Blocked attacks: {len(blocked_files)}")
+    typer.echo(f"  Suggestions:     {len(suggestions)}")
+    _echo_sep()
+
+    for idx, item in enumerate(suggestions, start=1):
+        sev = item["severity"].upper()
+        typer.echo(f"[{idx}] {item['technique']} / {sev} — {item['file']}")
+        typer.echo(f"    {item['suggestion']}")
+        typer.echo("")
+
+    raise typer.Exit(code=1)
 
 
 # --------------------------------------------------------------------------- #

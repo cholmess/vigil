@@ -191,6 +191,16 @@ extracts the captured LLM response, and evaluates it against the baseline using
 
 ---
 
+## `vigil heal`
+
+Suggests system-prompt hardening changes for attacks that still return `BLOCK`.
+
+```
+vigil heal [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network]
+```
+
+---
+
 ## `vigil audit` (deprecated alias)
 
 `vigil audit` is a hidden alias for `vigil forensics scan`. Use
