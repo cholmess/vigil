@@ -27,6 +27,8 @@ from vigil.loop.diff_aware import (
     select_snapshots_for_diff,
 )
 from vigil.loop.replayer import VigilBreakPointRunner
+from vigil.network.exchange import store_exchange_snapshot
+from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
 # Top-level app                                                                #
@@ -1030,6 +1032,79 @@ def network_pull(
         typer.echo(f"    vigil test --attacks-dir {effective_attacks} --prompt-file <file>")
     else:
         typer.echo(typer.style("No community snapshots available.", fg="yellow"))
+
+
+@network_app.command("sanitize")
+def network_sanitize(
+    source: Path = typer.Option(..., "--in", help="Snapshot file or directory to sanitize."),
+    out: Path = typer.Option(
+        Path(".vigil-data/network/sanitized"),
+        "--out",
+        help="Output directory for sanitized snapshots.",
+    ),
+    term: list[str] = typer.Option(
+        [],
+        "--term",
+        help="Company-specific term to redact (repeat for multiple).",
+    ),
+) -> None:
+    """Sanitize snapshots for safe cross-organization sharing."""
+    targets: list[Path]
+    if source.is_file():
+        targets = [source]
+    elif source.is_dir():
+        targets = sorted(source.glob("*.bp.json"))
+    else:
+        typer.echo(typer.style(f"Error: input not found: {source}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    if not targets:
+        typer.echo(typer.style("No .bp.json snapshots found to sanitize.", fg="yellow"))
+        return
+
+    out.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for item in targets:
+        written.append(sanitize_snapshot_file(item, out_dir=out, terms=term))
+
+    typer.echo(typer.style(f"Sanitized {len(written)} snapshot(s).", fg="green"))
+    typer.echo(f"  Output: {out}")
+    for path in written:
+        typer.echo(f"  → {path.name}")
+
+
+@network_app.command("push")
+def network_push(
+    snapshot: Path = typer.Argument(..., help="Snapshot .bp.json file to submit."),
+    sanitize: bool = typer.Option(
+        True,
+        "--sanitize/--no-sanitize",
+        help="Sanitize snapshot before pushing.",
+    ),
+    term: list[str] = typer.Option(
+        [],
+        "--term",
+        help="Company-specific term to redact during sanitization.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Submit a snapshot to the local Vigil exchange store."""
+    if not snapshot.exists():
+        typer.echo(typer.style(f"Error: snapshot file not found: {snapshot}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    candidate = snapshot
+    if sanitize:
+        staging = network_dir / "staging"
+        candidate = sanitize_snapshot_file(snapshot, out_dir=staging, terms=term)
+
+    network_id, stored = store_exchange_snapshot(candidate, network_dir=network_dir)
+    typer.echo(typer.style(f"Submitted snapshot. Network ID: {network_id}", fg="green"))
+    typer.echo(f"  Stored at: {stored}")
 
 
 # --------------------------------------------------------------------------- #

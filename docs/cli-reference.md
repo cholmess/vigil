@@ -21,6 +21,22 @@ Pulls community attack snapshots into your local attacks directory in one comman
 | `--community` | required | Pull from the built-in community snapshot library. |
 | `--attacks-dir` | `.vigil-data/attacks/` | Destination directory for pulled `.bp.json` snapshots. |
 
+### `vigil network sanitize`
+
+```
+vigil network sanitize --in SNAPSHOT_OR_DIR [--out DIR] [--term TERM ...]
+```
+
+Sanitizes snapshots for sharing: redacts credentials, emails, IPs, hostnames, and custom terms while preserving conversation structure, severity, and technique tags.
+
+### `vigil network push`
+
+```
+vigil network push SNAPSHOT.bp.json [--sanitize] [--term TERM ...]
+```
+
+Sanitizes (by default), assigns a network ID (`VN-YYYY-xxxxx`), and stores the snapshot in the local exchange under `.vigil-data/network/exchange/`.
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.
