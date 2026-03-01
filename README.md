@@ -76,7 +76,7 @@ vigil swarm-test \
   --prompt-file system_prompt.txt \
   --attacks-dir ./tests/attacks
 
-# Empirical vulnerability scoring by technique
+# Empirical vulnerability scoring (technique/class/framework)
 vigil score --prompt-file system_prompt.txt
 
 # Week 3: diff-aware mode (fast CI loop)

@@ -1252,6 +1252,22 @@ def score(
             f"similar={info['similar_matches']}/{info['supporting_snapshots']}"
         )
 
+    classes = report.get("classes", {})
+    if classes:
+        typer.echo("")
+        typer.echo("Top classes:")
+        for name, info in sorted(classes.items(), key=lambda kv: kv[1]["probability"], reverse=True)[:3]:
+            pct = round(float(info["probability"]) * 100, 1)
+            typer.echo(f"  {name:<24} {info['level']:<6} ({pct:>5.1f}%)")
+
+    frameworks = report.get("frameworks", {})
+    if frameworks:
+        typer.echo("")
+        typer.echo("Top frameworks:")
+        for name, info in sorted(frameworks.items(), key=lambda kv: kv[1]["probability"], reverse=True)[:3]:
+            pct = round(float(info["probability"]) * 100, 1)
+            typer.echo(f"  {name:<24} {info['level']:<6} ({pct:>5.1f}%)")
+
     typer.echo("")
     typer.echo("Top recommendation:")
     typer.echo(f"  {report['top_technique']}: {report['top_recommendation']}")

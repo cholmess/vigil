@@ -53,6 +53,37 @@ def _level(probability: float) -> str:
     return "LOW"
 
 
+def _extract_tag_values(tags: list[str], prefix: str) -> set[str]:
+    values: set[str] = set()
+    key = f"{prefix.lower()}:"
+    for tag in tags:
+        text = str(tag or "").strip()
+        if text.lower().startswith(key):
+            values.add(text.split(":", 1)[1].strip().lower())
+    return values
+
+
+def _score_group(prompt_tokens: set[str], subset: list[dict[str, Any]]) -> dict[str, Any]:
+    if not subset:
+        return {
+            "probability": 0.0,
+            "level": "LOW",
+            "supporting_snapshots": 0,
+            "similar_matches": 0,
+        }
+    sims = [_jaccard(prompt_tokens, r["tokens"]) for r in subset]
+    similar = [s for s in sims if s >= 0.05]
+    base_rate = len(similar) / len(subset)
+    avg_sim = mean(sorted(sims, reverse=True)[: min(5, len(sims))]) if sims else 0.0
+    probability = min(0.99, round((0.65 * base_rate) + (0.35 * avg_sim), 4))
+    return {
+        "probability": probability,
+        "level": _level(probability),
+        "supporting_snapshots": len(subset),
+        "similar_matches": len(similar),
+    }
+
+
 class VulnerabilityScorer:
     """Estimate per-technique vulnerability probabilities from snapshot corpus."""
 
@@ -83,6 +114,8 @@ class VulnerabilityScorer:
             rows.append(
                 {
                     "technique": snap.metadata.technique.value,
+                    "classes": sorted(_extract_tag_values(snap.metadata.tags, "class")) or ["unknown"],
+                    "frameworks": sorted(_extract_tag_values(snap.metadata.tags, "framework")) or ["unknown"],
                     "tokens": _tokenize(composite),
                 }
             )
@@ -95,33 +128,32 @@ class VulnerabilityScorer:
         by_technique: dict[str, dict[str, Any]] = {}
         for technique in _TECHNIQUES:
             subset = [r for r in rows if r["technique"] == technique]
-            if not subset:
-                by_technique[technique] = {
-                    "probability": 0.0,
-                    "level": "LOW",
-                    "supporting_snapshots": 0,
-                    "similar_matches": 0,
-                }
-                continue
+            by_technique[technique] = _score_group(prompt_tokens, subset)
 
-            sims = [_jaccard(prompt_tokens, r["tokens"]) for r in subset]
-            similar = [s for s in sims if s >= 0.05]
-            base_rate = len(similar) / len(subset)
-            avg_sim = mean(sorted(sims, reverse=True)[: min(5, len(sims))]) if sims else 0.0
-            probability = min(0.99, round((0.65 * base_rate) + (0.35 * avg_sim), 4))
-            by_technique[technique] = {
-                "probability": probability,
-                "level": _level(probability),
-                "supporting_snapshots": len(subset),
-                "similar_matches": len(similar),
-            }
+        class_names = sorted({c for row in rows for c in row["classes"]})
+        by_class = {
+            name: _score_group(prompt_tokens, [r for r in rows if name in r["classes"]])
+            for name in class_names
+        }
+
+        framework_names = sorted({f for row in rows for f in row["frameworks"]})
+        by_framework = {
+            name: _score_group(prompt_tokens, [r for r in rows if name in r["frameworks"]])
+            for name in framework_names
+        }
 
         top = max(by_technique.items(), key=lambda kv: kv[1]["probability"])
         top_technique = top[0]
+        top_class = max(by_class.items(), key=lambda kv: kv[1]["probability"])[0] if by_class else "unknown"
+        top_framework = max(by_framework.items(), key=lambda kv: kv[1]["probability"])[0] if by_framework else "unknown"
         return {
             "attacks_dir": str(self.attacks_dir),
             "total_snapshots": len(rows),
             "techniques": by_technique,
+            "classes": by_class,
+            "frameworks": by_framework,
             "top_technique": top_technique,
+            "top_class": top_class,
+            "top_framework": top_framework,
             "top_recommendation": _RECOMMENDATIONS.get(top_technique, "Increase policy strictness for this technique."),
         }

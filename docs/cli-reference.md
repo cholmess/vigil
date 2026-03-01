@@ -313,7 +313,7 @@ vigil swarm-test --workflow PATH [--framework NAME] [--attacks-dir DIR] [--out-d
 
 ## `vigil score`
 
-Computes an empirical vulnerability profile by technique from your local snapshot corpus.
+Computes an empirical vulnerability profile from your local snapshot corpus (techniques + attack classes + frameworks).
 
 ```
 vigil score [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network]
