@@ -139,6 +139,56 @@ def test_train_prepare_writes_bundle(tmp_path: Path) -> None:
         assert Path(".vigil-data/train/prepare-report.json").exists()
 
 
+def test_train_prepare_with_prompt_embeds_vulnerability_profile(monkeypatch, tmp_path: Path) -> None:
+    class _FakeScorer:
+        def __init__(self, attacks_dir):
+            self.attacks_dir = attacks_dir
+
+        def assess(self, prompt):
+            return {
+                "attacks_dir": str(self.attacks_dir),
+                "total_snapshots": 1,
+                "techniques": {"tool_injection": {"probability": 0.7, "level": "HIGH"}},
+                "classes": {"tool-result-injection": {"probability": 0.6, "level": "MEDIUM"}},
+                "frameworks": {"langchain": {"probability": 0.5, "level": "MEDIUM"}},
+                "top_technique": "tool_injection",
+                "top_class": "tool-result-injection",
+                "top_framework": "langchain",
+                "top_recommendation": "Sanitize tool outputs.",
+            }
+
+    monkeypatch.setattr("vigil.cli.VulnerabilityScorer", _FakeScorer)
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        network = Path(".vigil-data/network")
+        network.mkdir(parents=True, exist_ok=True)
+
+        snap = AttackSnapshot(
+            vigil_version="0.1.0",
+            metadata=SnapshotMetadata(
+                snapshot_id="train-b",
+                source="community",
+                severity="high",
+                technique="tool_injection",
+            ),
+            canary=Canary(token_type="api_key"),
+            attack=Attack(conversation=[Message(role="user", content="attack")]),
+        )
+        snap_path = snap.save_to_file(Path("train-b"))
+        store_exchange_snapshot(snap_path, network_dir=network)
+
+        prompt_path = Path("system_prompt.txt")
+        prompt_path.write_text("Use tools safely.", encoding="utf-8")
+        result = runner.invoke(
+            app,
+            ["train", "prepare", "--out-dir", ".vigil-data/train", "--prompt-file", str(prompt_path)],
+        )
+        assert result.exit_code == 0
+        report = json.loads(Path(".vigil-data/train/prepare-report.json").read_text(encoding="utf-8"))
+        assert "vulnerability_profile" in report
+        assert report["vulnerability_profile"]["top_technique"] == "tool_injection"
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

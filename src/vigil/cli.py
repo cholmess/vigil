@@ -2129,6 +2129,18 @@ def train_prepare(
         help="Filter training corpus by attack class tag.",
         show_default=False,
     ),
+    prompt: Optional[str] = typer.Option(
+        None,
+        "--prompt",
+        help="Optional system prompt text to embed vulnerability profile in report.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None,
+        "--prompt-file",
+        help="Optional prompt file to embed vulnerability profile in report.",
+        show_default=False,
+    ),
 ) -> None:
     """Prepare normalized corpus + metadata bundle for model training."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2146,6 +2158,24 @@ def train_prepare(
         typer.echo(typer.style("No corpus rows available for the selected filters.", fg="yellow"))
         return
 
+    profile: dict | None = None
+    if prompt and prompt_file:
+        typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if prompt or prompt_file:
+        if prompt_file:
+            if not prompt_file.exists():
+                typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+                raise typer.Exit(code=2)
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        scorer = VulnerabilityScorer(network_dir / "corpus" / "_tmp")
+        profile = scorer.assess(prompt_text)
+
     records = load_manifest_records(network_dir=network_dir)
     intel_payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -2159,6 +2189,8 @@ def train_prepare(
         "technique_trends": technique_trends(records, days=30),
         "class_trends": class_trends(records, days=30),
     }
+    if profile is not None:
+        intel_payload["vulnerability_profile"] = profile
     report_file.write_text(json.dumps(intel_payload, indent=2), encoding="utf-8")
 
     typer.echo(typer.style("Training bundle prepared.", fg="green"))

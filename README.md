@@ -58,6 +58,7 @@ vigil network import-exchange --in ./.vigil-data/network/export
 vigil network remote-push --repo git@github.com:your-org/vigil-exchange.git
 vigil network remote-pull --repo git@github.com:your-org/vigil-exchange.git
 vigil train prepare --out-dir ./.vigil-data/train
+vigil train prepare --out-dir ./.vigil-data/train --prompt-file system_prompt.txt
 vigil train stats --format json --out ./.vigil-data/train/stats.json
 
 # 2) Test current system prompt against every known attack

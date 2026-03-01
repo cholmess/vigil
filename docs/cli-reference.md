@@ -9,10 +9,11 @@ Training bundle preparation commands.
 ### `vigil train prepare`
 
 ```
-vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--class NAME]
+vigil train prepare [--out-dir DIR] [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--prompt-file PATH | --prompt TEXT]
 ```
 
-Builds a training-ready corpus bundle (`corpus.jsonl` + `prepare-report.json`) from exchange snapshots.
+Builds a training-ready corpus bundle (`corpus.jsonl` + `prepare-report.json`) from exchange snapshots.  
+If a prompt is provided, `prepare-report.json` also includes a vulnerability profile for prioritizing remediation/training focus.
 
 ### `vigil train stats`
 
