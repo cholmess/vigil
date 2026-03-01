@@ -37,6 +37,12 @@ cd examples/full_loop_demo
 ./run_end_to_end.sh
 ```
 
+If running from this repository, ensure dependencies are installed first:
+
+```bash
+pip install -e .
+```
+
 ## Expected Output
 
 ```

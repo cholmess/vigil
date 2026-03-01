@@ -6,6 +6,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHONPATH="$REPO_ROOT/src"
 export PYTHONPATH
 
+if ! python3 -c "import typer, pydantic, yaml" >/dev/null 2>&1; then
+  echo "ERROR: Missing Python dependencies for vigil demo."
+  echo "Run in an environment with project deps installed, for example:"
+  echo "  pip install -e ."
+  echo "Then rerun:"
+  echo "  ./examples/full_loop_demo/run_end_to_end.sh"
+  exit 2
+fi
+
 ATTACKS_DIR="$SCRIPT_DIR/attacks"
 LOGS_DIR="$SCRIPT_DIR/sample-logs"
 PROMPT_VULNERABLE="$SCRIPT_DIR/vulnerable_prompt.txt"
