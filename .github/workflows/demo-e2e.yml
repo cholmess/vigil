@@ -1,0 +1,40 @@
+name: Demo E2E Smoke
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  demo-e2e:
+    name: Full Loop Demo Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Vigil
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run end-to-end demo
+        run: |
+          ./examples/full_loop_demo/run_end_to_end.sh
+
+      - name: Upload demo artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-e2e-artifacts
+          path: |
+            examples/full_loop_demo/attacks/
+            examples/full_loop_demo/.vigil-data/
+          if-no-files-found: warn
