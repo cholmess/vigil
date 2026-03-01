@@ -16,6 +16,7 @@ import typer
 
 from vigil.config import VigilConfig
 from vigil.forensics.engine import VigilForensicsWrapper
+from vigil.intel.scorer import VulnerabilityScorer
 from vigil.models import AttackSnapshot
 from vigil.loop.library import (
     import_attacks,
@@ -1104,6 +1105,81 @@ def heal(
         typer.echo("")
 
     raise typer.Exit(code=1)
+
+
+# --------------------------------------------------------------------------- #
+# vigil score                                                                  #
+# --------------------------------------------------------------------------- #
+
+@app.command("score")
+def score(
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Directory containing .bp.json snapshots used as scoring corpus.",
+        show_default=False,
+    ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt",
+        help="System prompt text to assess.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None, "--prompt-file",
+        help="Path to a file containing the system prompt to assess.",
+        show_default=False,
+    ),
+    network: bool = typer.Option(
+        False,
+        "--network",
+        help="Use .vigil-data/network/pulled as corpus unless --attacks-dir is provided.",
+        is_flag=True,
+    ),
+) -> None:
+    """Assess empirical vulnerability risk by attack technique."""
+    cfg = VigilConfig.load()
+    if network and attacks_dir is None:
+        effective_attacks = Path(".vigil-data/network/pulled")
+    else:
+        effective_attacks, _ = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    if prompt and prompt_file:
+        typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if not prompt and not prompt_file:
+        typer.echo(typer.style("Error: one of --prompt or --prompt-file is required.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if prompt_file:
+        if not prompt_file.exists():
+            typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+    else:
+        prompt_text = (prompt or "").strip()
+    if not prompt_text:
+        typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    scorer = VulnerabilityScorer(effective_attacks)
+    report = scorer.assess(prompt_text)
+
+    _echo_sep("Vulnerability Scorer")
+    typer.echo(f"  Corpus: {report['attacks_dir']}")
+    typer.echo(f"  Snapshots: {report['total_snapshots']}")
+    _echo_sep()
+
+    techniques = report["techniques"]
+    ordered = sorted(techniques.items(), key=lambda kv: kv[1]["probability"], reverse=True)
+    for name, info in ordered:
+        pct = round(float(info["probability"]) * 100, 1)
+        typer.echo(
+            f"  {name:<16} {info['level']:<6} ({pct:>5.1f}%)  "
+            f"similar={info['similar_matches']}/{info['supporting_snapshots']}"
+        )
+
+    typer.echo("")
+    typer.echo("Top recommendation:")
+    typer.echo(f"  {report['top_technique']}: {report['top_recommendation']}")
+    typer.echo("")
 
 
 # --------------------------------------------------------------------------- #

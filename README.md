@@ -60,6 +60,9 @@ vigil swarm-test \
   --prompt-file system_prompt.txt \
   --attacks-dir ./tests/attacks
 
+# Empirical vulnerability scoring by technique
+vigil score --prompt-file system_prompt.txt
+
 # Week 3: diff-aware mode (fast CI loop)
 vigil test --prompt-file system_prompt.txt --diff-aware
 # → runs only snapshots relevant to prompt diff

@@ -11,6 +11,7 @@ Public API surface:
 
 from vigil.config import VigilConfig
 from vigil.forensics.engine import VigilForensicsWrapper
+from vigil.intel.scorer import VulnerabilityScorer
 from vigil.loop.exporter import VigilCanariWrapper
 from vigil.loop.replayer import VigilBreakPointRunner
 from vigil.models import (
@@ -44,6 +45,7 @@ __all__ = [
     "VigilCanariWrapper",
     "VigilBreakPointRunner",
     "VigilForensicsWrapper",
+    "VulnerabilityScorer",
     # Config
     "VigilConfig",
     # Version

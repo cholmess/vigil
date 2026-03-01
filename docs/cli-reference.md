@@ -214,6 +214,16 @@ vigil swarm-test --workflow PATH [--framework NAME] [--attacks-dir DIR] [--out-d
 
 ---
 
+## `vigil score`
+
+Computes an empirical vulnerability profile by technique from your local snapshot corpus.
+
+```
+vigil score [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network]
+```
+
+---
+
 ## `vigil audit` (deprecated alias)
 
 `vigil audit` is a hidden alias for `vigil forensics scan`. Use
