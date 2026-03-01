@@ -8,7 +8,7 @@ from vigil.network.exchange import (
     write_network_state,
     write_last_pull_since,
 )
-from vigil.network.intel import load_manifest_records, technique_trends
+from vigil.network.intel import class_trends, load_manifest_records, technique_trends
 from vigil.network.sanitizer import sanitize_snapshot, sanitize_snapshot_file
 
 __all__ = [
@@ -22,4 +22,5 @@ __all__ = [
     "write_network_state",
     "load_manifest_records",
     "technique_trends",
+    "class_trends",
 ]

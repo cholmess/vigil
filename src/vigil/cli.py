@@ -42,7 +42,7 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
-from vigil.network.intel import load_manifest_records, technique_trends
+from vigil.network.intel import class_trends, load_manifest_records, technique_trends
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -1491,6 +1491,23 @@ def network_push(
 @network_app.command("intel")
 def network_intel(
     days: int = typer.Option(7, "--days", help="Comparison window in days."),
+    prompt: Optional[str] = typer.Option(
+        None,
+        "--prompt",
+        help="Optional system prompt to compute shield score against top trending class.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None,
+        "--prompt-file",
+        help="Path to a system prompt file for shield score against top trending class.",
+        show_default=False,
+    ),
+    attacks_dir: Path = typer.Option(
+        Path(".vigil-data/network/pulled"),
+        "--attacks-dir",
+        help="Pulled network snapshot directory used for class shield-score check.",
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1522,12 +1539,75 @@ def network_intel(
         typer.echo("  No current-period activity.")
         return
 
+    class_rows = [row for row in class_trends(records, days=days) if row["current"] > 0]
+    if class_rows:
+        typer.echo("")
+        typer.echo("Trending classes:")
+        for row in class_rows[:3]:
+            arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
+            typer.echo(
+                f"  {row['attack_class']:<24} current={row['current']:<3} "
+                f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
+            )
+
+    top_class = class_rows[0]["attack_class"] if class_rows else None
+
     for row in top:
         arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
         typer.echo(
             f"  {row['technique']:<16} current={row['current']:<3} "
             f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
         )
+
+    if prompt or prompt_file:
+        if prompt and prompt_file:
+            typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        if prompt_file:
+            if not prompt_file.exists():
+                typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+                raise typer.Exit(code=2)
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        if not top_class:
+            typer.echo("\nNo class trend available to score against.")
+            return
+
+        class_files: list[Path] = []
+        for bp in sorted(Path(attacks_dir).glob("*.bp.json")):
+            try:
+                snap = AttackSnapshot.load_from_file(bp)
+            except Exception:
+                continue
+            tags = {str(t).lower() for t in snap.metadata.tags}
+            if f"class:{top_class}" in tags:
+                class_files.append(bp)
+
+        if not class_files:
+            typer.echo(f"\nNo pulled snapshots found for class '{top_class}' in {attacks_dir}.")
+            typer.echo(f"Run: vigil network pull --class {top_class}")
+            return
+
+        runner = VigilBreakPointRunner()
+        summary = runner.run_regression_suite(attacks_dir, prompt_text, snapshot_files=class_files)
+        total = int(summary["total"])
+        allowed = int(summary["allowed"])
+        blocked = int(summary["blocked"])
+        pct = round((allowed / total) * 100, 2) if total else 0.0
+
+        typer.echo("")
+        typer.echo(f"Your shield score against class '{top_class}': {allowed}/{total} ({pct}%)")
+        if blocked > 0:
+            typer.echo(f"  {blocked} attacks still succeed.")
+            typer.echo("  Run:")
+            typer.echo(f"    vigil network pull --class {top_class}")
+            typer.echo("    vigil test --network --prompt-file <file>")
+            typer.echo("    vigil heal --intelligent --network --prompt-file <file>")
 
 
 # --------------------------------------------------------------------------- #

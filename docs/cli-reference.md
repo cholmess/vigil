@@ -44,10 +44,11 @@ Sanitizes (by default), assigns a network ID (`VN-YYYY-xxxxx`), and stores the s
 ### `vigil network intel`
 
 ```
-vigil network intel [--days 7]
+vigil network intel [--days 7] [--prompt-file PATH | --prompt TEXT]
 ```
 
-Displays trending attack techniques over the last `N` days vs the previous `N` days using local exchange manifest history.
+Displays trending attack techniques and classes over the last `N` days vs the previous `N` days using local exchange manifest history.  
+If a prompt is provided, it also reports shield score against the top trending class (using pulled snapshots).
 
 ## `vigil forensics`
 

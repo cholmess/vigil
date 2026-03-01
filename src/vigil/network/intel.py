@@ -84,3 +84,46 @@ def technique_trends(
         )
     trends.sort(key=lambda r: (r["delta"], r["current"]), reverse=True)
     return trends
+
+
+def class_trends(
+    records: list[dict[str, Any]],
+    *,
+    days: int = 7,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Return attack-class trend deltas for current vs previous period."""
+    ref = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
+    current_start = ref - timedelta(days=days)
+    previous_start = current_start - timedelta(days=days)
+
+    current = Counter()
+    previous = Counter()
+
+    for row in records:
+        attack_class = str(row.get("attack_class") or "").strip().lower()
+        if not attack_class:
+            continue
+        submitted = _parse_iso8601(str(row.get("submitted_at", "")))
+        if submitted is None:
+            continue
+        if submitted >= current_start:
+            current[attack_class] += 1
+        elif previous_start <= submitted < current_start:
+            previous[attack_class] += 1
+
+    keys = sorted(set(current) | set(previous))
+    trends: list[dict[str, Any]] = []
+    for key in keys:
+        c = int(current.get(key, 0))
+        p = int(previous.get(key, 0))
+        trends.append(
+            {
+                "attack_class": key,
+                "current": c,
+                "previous": p,
+                "delta": c - p,
+            }
+        )
+    trends.sort(key=lambda r: (r["delta"], r["current"]), reverse=True)
+    return trends
