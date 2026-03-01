@@ -48,7 +48,17 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        cmd=(vigil test --prompt-file "${{ inputs.prompt-file }}" --attacks-dir "${{ inputs.attacks-dir }}")
+        prompt_file="${{ inputs.prompt-file }}"
+        if [ ! -f "$prompt_file" ]; then
+          if [ "$prompt_file" = "system_prompt.txt" ] && [ -f "examples/full_loop_demo/system_prompt.txt" ]; then
+            echo "Prompt file '$prompt_file' not found; using examples/full_loop_demo/system_prompt.txt"
+            prompt_file="examples/full_loop_demo/system_prompt.txt"
+          else
+            echo "Error: prompt file not found: $prompt_file" >&2
+            exit 2
+          fi
+        fi
+        cmd=(vigil test --prompt-file "$prompt_file" --attacks-dir "${{ inputs.attacks-dir }}")
         if [ "${{ inputs.report }}" = "true" ]; then
           cmd+=(--report)
         fi
