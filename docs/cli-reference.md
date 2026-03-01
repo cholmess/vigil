@@ -204,6 +204,16 @@ vigil heal [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network]
 
 ---
 
+## `vigil swarm-test`
+
+Runs blocked-attack attribution across workflow handoffs and saves `swarm-*.bp.json` snapshots.
+
+```
+vigil swarm-test --workflow PATH [--framework NAME] [--attacks-dir DIR] [--out-dir DIR] [--prompt-file PATH | --prompt TEXT]
+```
+
+---
+
 ## `vigil audit` (deprecated alias)
 
 `vigil audit` is a hidden alias for `vigil forensics scan`. Use

@@ -29,6 +29,7 @@ from vigil.loop.diff_aware import (
 )
 from vigil.loop.heal import hardening_suggestions_for_files
 from vigil.loop.replayer import VigilBreakPointRunner
+from vigil.loop.swarm import run_swarm_test
 from vigil.network.exchange import (
     pull_exchange_snapshots,
     read_network_state,
@@ -1100,6 +1101,84 @@ def heal(
         sev = item["severity"].upper()
         typer.echo(f"[{idx}] {item['technique']} / {sev} — {item['file']}")
         typer.echo(f"    {item['suggestion']}")
+        typer.echo("")
+
+    raise typer.Exit(code=1)
+
+
+# --------------------------------------------------------------------------- #
+# vigil swarm-test                                                             #
+# --------------------------------------------------------------------------- #
+
+@app.command("swarm-test")
+def swarm_test(
+    workflow: Path = typer.Option(..., "--workflow", help="Path to workflow definition file (e.g. LangGraph)."),
+    framework: str = typer.Option("generic", "--framework", help="Framework label (langgraph, langchain, assistants, generic)."),
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Directory containing .bp.json snapshots.",
+        show_default=False,
+    ),
+    out_dir: Optional[Path] = typer.Option(
+        None, "--out-dir",
+        help="Directory to write swarm-* snapshots (default: attacks dir).",
+        show_default=False,
+    ),
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="Current system prompt as an inline string.", show_default=False),
+    prompt_file: Optional[Path] = typer.Option(None, "--prompt-file", help="Path to system prompt file.", show_default=False),
+) -> None:
+    """Run multi-agent attribution over blocked attacks and save swarm snapshots."""
+    cfg = VigilConfig.load()
+    effective_attacks, _ = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+    effective_out = out_dir or effective_attacks
+
+    if not workflow.exists():
+        typer.echo(typer.style(f"Error: workflow file not found: {workflow}", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if prompt and prompt_file:
+        typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if not prompt and not prompt_file:
+        typer.echo(typer.style("Error: one of --prompt or --prompt-file is required.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if prompt_file:
+        if not prompt_file.exists():
+            typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        current_system_prompt = prompt_file.read_text(encoding="utf-8").strip()
+    else:
+        current_system_prompt = (prompt or "").strip()
+    if not current_system_prompt:
+        typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    result = run_swarm_test(
+        workflow_file=workflow,
+        attacks_dir=effective_attacks,
+        prompt=current_system_prompt,
+        framework=framework,
+        out_dir=effective_out,
+    )
+    findings = result["findings"]
+
+    _echo_sep("Vigil Swarm Test")
+    typer.echo(f"  Workflow:   {workflow}")
+    typer.echo(f"  Framework:  {framework}")
+    typer.echo(f"  Attacks:    {effective_attacks}")
+    _echo_sep()
+
+    if not findings:
+        typer.echo(typer.style("  No blocked attacks detected for this workflow.", fg="green"))
+        return
+
+    for finding in findings:
+        src_agent, dst_agent = finding["handoff"]
+        typer.echo(f"Agent: {src_agent} -> {dst_agent} handoff")
+        typer.echo(
+            f"Attack: {finding['technique']} / {str(finding['severity']).upper()} ({finding['snapshot_id']})"
+        )
+        typer.echo(f"Status: {finding['status']}")
+        typer.echo(f"Snapshot saved: {finding['saved_snapshot']}")
         typer.echo("")
 
     raise typer.Exit(code=1)
