@@ -1,5 +1,9 @@
 # vigil
 
+[![CI](https://github.com/cholmess/vigil/actions/workflows/ci.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/ci.yml)
+[![LLM Safety Gate](https://github.com/cholmess/vigil/actions/workflows/vigil.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/vigil.yml)
+[![Demo E2E Smoke](https://github.com/cholmess/vigil/actions/workflows/demo-e2e.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/demo-e2e.yml)
+
 Close the loop between detecting an LLM attack and making sure it never works again.
 
 Most teams find out about a prompt injection weeks after it happened — if ever. The attacker asked the model to dump its context. The model complied. The response looked like a normal API call. No firewall flagged it. By the time anyone noticed, the system prompt, internal configuration, and synthetic credentials had already been exfiltrated.
@@ -202,6 +206,7 @@ if any(r.status == "BLOCK" for r in results):
 - [The Feedback Loop](docs/loop.md) — the full loop explained
 - [Snapshot Format](docs/snapshot-format.md) — `.bp.json` field contract
 - [CLI Reference](docs/cli-reference.md) — all `vigil` commands
+- [Release Checklist](RELEASE_CHECKLIST.md) — final pre-release verification steps
 - [Forensics](docs/forensics.md) — pattern library, log formats, evidence pack
 - [Integration Guide](docs/integration-guide.md) — Python API usage
 - [Quickstart](docs/quickstart.md) — 10-minute walkthrough
