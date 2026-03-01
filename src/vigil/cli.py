@@ -2678,6 +2678,10 @@ def train_bootstrap(
     corpus_file = out_dir / "corpus.jsonl"
     report_file = out_dir / "prepare-report.json"
     bundle_file = out_dir / "train-bundle.tar.gz"
+    run_store = out_dir / "runs"
+    run_store.mkdir(parents=True, exist_ok=True)
+    run_id = f"TR-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     prepared_path, rows = export_corpus_jsonl(
         network_dir=network_dir,
@@ -2737,6 +2741,8 @@ def train_bootstrap(
             bundle_path, bundle_manifest = package_train_bundle(train_dir=out_dir, out_file=bundle_file)
 
     payload = {
+        "run_id": run_id,
+        "generated_at": generated_at,
         "ok": bool(rows > 0) and bool(validation.get("ok")) and bool(balance.get("ok")) and bool(doctor.get("ok")),
         "prepare": prepare_payload,
         "validation": validation,
@@ -2748,6 +2754,7 @@ def train_bootstrap(
             "packaged": bundle_path is not None,
         },
     }
+    (run_store / f"{run_id}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     if format == ReportFormat.json:
         rendered = json.dumps(payload, indent=2)
@@ -2759,6 +2766,7 @@ def train_bootstrap(
             typer.echo(rendered)
     else:
         _echo_sep("Vigil Train Bootstrap")
+        typer.echo(f"  Run ID: {run_id}")
         typer.echo(f"  Rows exported: {rows}")
         typer.echo(f"  Validation: {'OK' if validation.get('ok') else 'FAIL'}")
         typer.echo(f"  Balance: {'OK' if balance.get('ok') else 'FAIL'}")
@@ -2768,6 +2776,74 @@ def train_bootstrap(
 
     if strict and not payload["ok"]:
         raise typer.Exit(code=1)
+
+
+@train_app.command("runs")
+def train_runs(
+    train_dir: Path = typer.Option(
+        Path(".vigil-data/train"),
+        "--train-dir",
+        help="Directory containing train artifacts and runs/",
+    ),
+    limit: int = typer.Option(10, "--limit", help="Maximum number of runs to show."),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for runs payload."),
+) -> None:
+    """List recent train bootstrap runs and statuses."""
+    if limit <= 0:
+        typer.echo(typer.style("Error: --limit must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    store = train_dir / "runs"
+    if not store.exists():
+        typer.echo(typer.style("No train runs found yet.", fg="yellow"))
+        return
+
+    entries: list[dict[str, object]] = []
+    for path in sorted(store.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        entries.append(
+            {
+                "run_id": str(data.get("run_id") or path.stem),
+                "generated_at": str(data.get("generated_at") or ""),
+                "ok": bool(data.get("ok")),
+                "rows": int(((data.get("prepare") or {}).get("rows") or 0)),
+                "bundle_packaged": bool(((data.get("bundle") or {}).get("packaged"))),
+            }
+        )
+        if len(entries) >= limit:
+            break
+
+    payload = {
+        "train_dir": str(train_dir),
+        "count": len(entries),
+        "runs": entries,
+    }
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Runs report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
+
+    _echo_sep("Vigil Train Runs")
+    typer.echo(f"  Directory: {store}")
+    typer.echo(f"  Runs shown: {len(entries)}")
+    for row in entries:
+        status = "PASS" if row["ok"] else "FAIL"
+        typer.echo(
+            f"  {row['run_id']}  {status:<4} rows={row['rows']:<4} "
+            f"bundle={'yes' if row['bundle_packaged'] else 'no'}  {row['generated_at']}"
+        )
 
 
 @network_app.command("remote-pull")

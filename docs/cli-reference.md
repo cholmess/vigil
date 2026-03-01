@@ -88,6 +88,14 @@ vigil train bootstrap [--out-dir DIR] [--network-dir DIR] [--val-ratio FLOAT] [-
 
 Runs an end-to-end training bootstrap flow in one command: export corpus, optional split, validate, balance/doctor checks, and bundle packaging.
 
+### `vigil train runs`
+
+```
+vigil train runs [--train-dir DIR] [--limit N] [--format text|json] [--out PATH]
+```
+
+Lists recent bootstrap runs recorded under `train_dir/runs`, including pass/fail status, exported rows, and bundle state.
+
 ## `vigil network`
 
 Network snapshot sync commands.

@@ -403,7 +403,32 @@ def test_train_bootstrap_json_output(monkeypatch, tmp_path: Path) -> None:
         assert result.exit_code == 0
         payload = json.loads(out.read_text(encoding="utf-8"))
         assert payload["ok"] is True
+        assert payload["run_id"].startswith("TR-")
         assert payload["bundle"]["packaged"] is True
+
+
+def test_train_runs_json_output(tmp_path: Path) -> None:
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        run_dir = Path(".vigil-data/train/runs")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "TR-1.json").write_text(
+            json.dumps(
+                {
+                    "run_id": "TR-1",
+                    "generated_at": "2026-03-01T00:00:00Z",
+                    "ok": True,
+                    "prepare": {"rows": 12},
+                    "bundle": {"packaged": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+        out = Path("runs.json")
+        result = runner.invoke(app, ["train", "runs", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["count"] == 1
+        assert payload["runs"][0]["run_id"] == "TR-1"
 
 
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
