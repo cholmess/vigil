@@ -30,9 +30,10 @@ from vigil.loop.heal import hardening_suggestions_for_files
 from vigil.loop.replayer import VigilBreakPointRunner
 from vigil.network.exchange import (
     pull_exchange_snapshots,
+    read_network_state,
     read_last_pull_since,
     store_exchange_snapshot,
-    write_last_pull_since,
+    write_network_state,
 )
 from vigil.network.sanitizer import sanitize_snapshot_file
 
@@ -963,6 +964,18 @@ def test(
 
     _echo_sep()
 
+    if network:
+        shield_pct = round((allowed / total) * 100, 2) if total else 0.0
+        net_state = read_network_state()
+        last_pull_count = int(net_state.get("last_pull_count", 0) or 0)
+        typer.echo(f"  Shield score: {allowed}/{total} ({shield_pct}%)")
+        if last_pull_count > 0:
+            typer.echo(f"  ↑ {last_pull_count} new attacks tested since last sync")
+        if blocked > 0:
+            typer.echo(f"  ✗ {blocked} attacks succeed against your current prompt")
+            typer.echo("  Run `vigil heal --network --prompt-file <file>` for hardening suggestions")
+        _echo_sep()
+
     if report:
         report_path = _write_test_report(Path("vigil-report.json"), summary)
         typer.echo(f"  JSON report:     {report_path}")
@@ -1143,7 +1156,15 @@ def network_pull(
         typer.echo(f"  Destination: {pulled_dir}")
         if effective_since:
             typer.echo(f"  Since: {effective_since}")
-        write_last_pull_since(network_dir=network_dir)
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        write_network_state(
+            network_dir=network_dir,
+            updates={
+                "last_pull_since": now_iso,
+                "last_pull_count": len(pulled),
+                "last_pull_at": now_iso,
+            },
+        )
         typer.echo("  Run:")
         typer.echo("    vigil test --network --prompt-file <file>")
     else:

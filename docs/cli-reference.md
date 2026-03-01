@@ -169,6 +169,8 @@ extracts the captured LLM response, and evaluates it against the baseline using
 | `--base-ref` | `GITHUB_BASE_REF` or `HEAD~1` | Git ref used to compute prompt diff in diff-aware mode. |
 | `--network` | disabled | Uses `.vigil-data/network/pulled` as attack source unless `--attacks-dir` is explicitly set. |
 
+When `--network` is enabled, CLI output includes network shield score and the number of newly pulled attacks from the last sync state.
+
 **Exit codes:**
 
 | Code | Meaning |

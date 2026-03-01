@@ -7,8 +7,10 @@ from pathlib import Path
 from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
 from vigil.network.exchange import (
     pull_exchange_snapshots,
+    read_network_state,
     read_last_pull_since,
     store_exchange_snapshot,
+    write_network_state,
     write_last_pull_since,
 )
 
@@ -70,3 +72,12 @@ def test_write_and_read_last_pull_since(tmp_path: Path) -> None:
     network_dir = tmp_path / "network"
     write_last_pull_since(network_dir=network_dir, timestamp="2026-03-01T00:00:00Z")
     assert read_last_pull_since(network_dir=network_dir) == "2026-03-01T00:00:00Z"
+
+
+def test_write_network_state_merges_updates(tmp_path: Path) -> None:
+    network_dir = tmp_path / "network"
+    write_network_state(network_dir=network_dir, updates={"last_pull_count": 3})
+    write_network_state(network_dir=network_dir, updates={"last_pull_since": "2026-03-01T00:00:00Z"})
+    state = read_network_state(network_dir=network_dir)
+    assert state["last_pull_count"] == 3
+    assert state["last_pull_since"] == "2026-03-01T00:00:00Z"

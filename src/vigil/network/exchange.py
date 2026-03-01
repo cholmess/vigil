@@ -112,15 +112,37 @@ def pull_exchange_snapshots(
     return pulled
 
 
-def read_last_pull_since(*, network_dir: str | Path = ".vigil-data/network") -> str | None:
-    """Read last pull timestamp from local network state."""
+def read_network_state(*, network_dir: str | Path = ".vigil-data/network") -> dict[str, Any]:
+    """Read local network state metadata."""
     state = Path(network_dir) / "state.json"
     if not state.exists():
-        return None
+        return {}
     try:
         payload = json.loads(state.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return None
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return payload
+
+
+def write_network_state(
+    *,
+    network_dir: str | Path = ".vigil-data/network",
+    updates: dict[str, Any],
+) -> Path:
+    """Merge and persist network state updates."""
+    current = read_network_state(network_dir=network_dir)
+    current.update(updates or {})
+    state = Path(network_dir) / "state.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps(current, indent=2), encoding="utf-8")
+    return state
+
+
+def read_last_pull_since(*, network_dir: str | Path = ".vigil-data/network") -> str | None:
+    """Read last pull timestamp from local network state."""
+    payload = read_network_state(network_dir=network_dir)
     raw = payload.get("last_pull_since")
     return str(raw) if raw else None
 
@@ -132,7 +154,4 @@ def write_last_pull_since(
 ) -> Path:
     """Persist last pull timestamp in local network state."""
     value = timestamp or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    state = Path(network_dir) / "state.json"
-    state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(json.dumps({"last_pull_since": value}, indent=2), encoding="utf-8")
-    return state
+    return write_network_state(network_dir=network_dir, updates={"last_pull_since": value})

@@ -97,6 +97,7 @@ def test_vigil_test_network_uses_network_cache_dir(monkeypatch, tmp_path: Path) 
             }
 
     monkeypatch.setattr("vigil.cli.VigilBreakPointRunner", _FakeRunner)
+    monkeypatch.setattr("vigil.cli.read_network_state", lambda: {"last_pull_count": 23})
 
     with runner.isolated_filesystem(temp_dir=str(tmp_path)):
         cache = Path(".vigil-data/network/pulled")
@@ -107,3 +108,5 @@ def test_vigil_test_network_uses_network_cache_dir(monkeypatch, tmp_path: Path) 
         result = runner.invoke(app, ["test", "--network", "--prompt-file", str(prompt_path)])
         assert result.exit_code == 0
         assert called["attacks_dir"] == str(cache)
+        assert "Shield score:" in result.output
+        assert "23 new attacks tested since last sync" in result.output
