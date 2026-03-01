@@ -110,3 +110,29 @@ def pull_exchange_snapshots(
         pulled.append(dest)
 
     return pulled
+
+
+def read_last_pull_since(*, network_dir: str | Path = ".vigil-data/network") -> str | None:
+    """Read last pull timestamp from local network state."""
+    state = Path(network_dir) / "state.json"
+    if not state.exists():
+        return None
+    try:
+        payload = json.loads(state.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    raw = payload.get("last_pull_since")
+    return str(raw) if raw else None
+
+
+def write_last_pull_since(
+    *,
+    network_dir: str | Path = ".vigil-data/network",
+    timestamp: str | None = None,
+) -> Path:
+    """Persist last pull timestamp in local network state."""
+    value = timestamp or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state = Path(network_dir) / "state.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps({"last_pull_since": value}, indent=2), encoding="utf-8")
+    return state

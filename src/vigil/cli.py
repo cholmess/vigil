@@ -27,7 +27,12 @@ from vigil.loop.diff_aware import (
     select_snapshots_for_diff,
 )
 from vigil.loop.replayer import VigilBreakPointRunner
-from vigil.network.exchange import pull_exchange_snapshots, store_exchange_snapshot
+from vigil.network.exchange import (
+    pull_exchange_snapshots,
+    read_last_pull_since,
+    store_exchange_snapshot,
+    write_last_pull_since,
+)
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -1047,10 +1052,14 @@ def network_pull(
         return
 
     pulled_dir = attacks_dir or Path(".vigil-data/network/pulled")
-    pulled = pull_exchange_snapshots(network_dir=network_dir, out_dir=pulled_dir, since=since)
+    effective_since = since or read_last_pull_since(network_dir=network_dir)
+    pulled = pull_exchange_snapshots(network_dir=network_dir, out_dir=pulled_dir, since=effective_since)
     if pulled:
         typer.echo(typer.style(f"Downloaded {len(pulled)} network snapshot(s).", fg="green"))
         typer.echo(f"  Destination: {pulled_dir}")
+        if effective_since:
+            typer.echo(f"  Since: {effective_since}")
+        write_last_pull_since(network_dir=network_dir)
         typer.echo("  Run:")
         typer.echo("    vigil test --network --prompt-file <file>")
     else:

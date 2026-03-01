@@ -20,7 +20,7 @@ Without `--community`, pulls from your local exchange manifest into `.vigil-data
 | Flag | Default | Description |
 |---|---|---|
 | `--community` | disabled | Pull from the built-in community snapshot library. |
-| `--since` | none | Only pull snapshots submitted on/after this date. |
+| `--since` | last sync timestamp | Only pull snapshots submitted on/after this date. |
 | `--attacks-dir` | `.vigil-data/network/pulled` (exchange mode) | Destination directory for pulled `.bp.json` snapshots. |
 
 ### `vigil network sanitize`

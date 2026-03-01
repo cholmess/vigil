@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
-from vigil.network.exchange import pull_exchange_snapshots, store_exchange_snapshot
+from vigil.network.exchange import (
+    pull_exchange_snapshots,
+    read_last_pull_since,
+    store_exchange_snapshot,
+    write_last_pull_since,
+)
 
 
 def _snapshot(tmp_path: Path, name: str) -> Path:
@@ -59,3 +64,9 @@ def test_pull_exchange_snapshots_respects_since_filter(tmp_path: Path) -> None:
         since="2999-01-01",
     )
     assert pulled == []
+
+
+def test_write_and_read_last_pull_since(tmp_path: Path) -> None:
+    network_dir = tmp_path / "network"
+    write_last_pull_since(network_dir=network_dir, timestamp="2026-03-01T00:00:00Z")
+    assert read_last_pull_since(network_dir=network_dir) == "2026-03-01T00:00:00Z"
