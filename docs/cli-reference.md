@@ -58,6 +58,14 @@ vigil network export-corpus [--out PATH] [--since YYYY-MM-DD] [--framework NAME]
 
 Exports exchange snapshots as normalized JSONL rows for model training / analytics.
 
+### `vigil network digest`
+
+```
+vigil network digest [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT]
+```
+
+Shows a summary of pulled snapshots and, when a prompt is provided, how many currently succeed (`BLOCK`) against that prompt.
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.

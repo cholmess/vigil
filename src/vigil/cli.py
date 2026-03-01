@@ -43,6 +43,7 @@ from vigil.network.exchange import (
     write_network_state,
 )
 from vigil.network.corpus import export_corpus_jsonl
+from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import class_trends, load_manifest_records, technique_trends
 from vigil.network.sanitizer import sanitize_snapshot_file
 
@@ -1655,6 +1656,62 @@ def network_export_corpus(
         return
     typer.echo(typer.style(f"Exported corpus rows: {rows}", fg="green"))
     typer.echo(f"  File: {out_path}")
+
+
+@network_app.command("digest")
+def network_digest(
+    attacks_dir: Path = typer.Option(
+        Path(".vigil-data/network/pulled"),
+        "--attacks-dir",
+        help="Pulled network snapshot directory.",
+    ),
+    prompt: Optional[str] = typer.Option(
+        None,
+        "--prompt",
+        help="Optional system prompt to compute affected attack count.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None,
+        "--prompt-file",
+        help="Path to a system prompt file for affected count.",
+        show_default=False,
+    ),
+) -> None:
+    """Show a digest of pulled network attacks and prompt impact."""
+    summary = summarize_pulled_snapshots(attacks_dir)
+    total = int(summary["total"])
+    if total == 0:
+        typer.echo(typer.style("No pulled network snapshots found.", fg="yellow"))
+        return
+
+    _echo_sep("Vigil Network Digest")
+    typer.echo(f"  Pulled snapshots: {total}")
+    typer.echo(f"  Techniques: {summary['by_technique']}")
+    typer.echo(f"  Severities: {summary['by_severity']}")
+    _echo_sep()
+
+    if prompt or prompt_file:
+        if prompt and prompt_file:
+            typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        if prompt_file:
+            if not prompt_file.exists():
+                typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+                raise typer.Exit(code=2)
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        runner = VigilBreakPointRunner()
+        test_summary = runner.run_regression_suite(attacks_dir, prompt_text)
+        affected = int(test_summary["blocked"])
+        typer.echo(f"{total} new network attacks pulled — {affected} affect your current prompt.")
+        if affected > 0:
+            typer.echo("Run `vigil heal --intelligent --network --prompt-file <file>` to prioritize fixes.")
 
 
 # --------------------------------------------------------------------------- #
