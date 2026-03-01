@@ -9,7 +9,7 @@ Network snapshot sync commands.
 ### `vigil network pull`
 
 ```
-vigil network pull [--community] [--since YYYY-MM-DD] [--framework NAME] [--attacks-dir DIR]
+vigil network pull [--community] [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--attacks-dir DIR]
 ```
 
 Pulls community attack snapshots into your local attacks directory in one command.
@@ -22,6 +22,7 @@ Without `--community`, pulls from your local exchange manifest into `.vigil-data
 | `--community` | disabled | Pull from the built-in community snapshot library. |
 | `--since` | last sync timestamp | Only pull snapshots submitted on/after this date. |
 | `--framework` | none | Pull only snapshots tagged with `framework:<name>`. |
+| `--class` | none | Pull only snapshots tagged with `class:<name>`. |
 | `--attacks-dir` | `.vigil-data/network/pulled` (exchange mode) | Destination directory for pulled `.bp.json` snapshots. |
 
 ### `vigil network sanitize`
@@ -35,7 +36,7 @@ Sanitizes snapshots for sharing: redacts credentials, emails, IPs, hostnames, an
 ### `vigil network push`
 
 ```
-vigil network push SNAPSHOT.bp.json [--sanitize] [--term TERM ...] [--framework NAME]
+vigil network push SNAPSHOT.bp.json [--sanitize] [--term TERM ...] [--framework NAME] [--attack-class NAME]
 ```
 
 Sanitizes (by default), assigns a network ID (`VN-YYYY-xxxxx`), and stores the snapshot in the local exchange under `.vigil-data/network/exchange/`.

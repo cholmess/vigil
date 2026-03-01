@@ -46,6 +46,22 @@ def _snapshot_with_framework(tmp_path: Path, name: str, framework: str) -> Path:
     return snap.save_to_file(tmp_path / name)
 
 
+def _snapshot_with_class(tmp_path: Path, name: str, attack_class: str) -> Path:
+    snap = AttackSnapshot(
+        vigil_version="0.1.0",
+        metadata=SnapshotMetadata(
+            snapshot_id=name,
+            source="community",
+            severity="high",
+            technique="tool_injection",
+            tags=[f"class:{attack_class}"],
+        ),
+        canary=Canary(token_type="api_key"),
+        attack=Attack(conversation=[Message(role="user", content="x")]),
+    )
+    return snap.save_to_file(tmp_path / name)
+
+
 def test_store_exchange_snapshot_assigns_network_id(tmp_path: Path) -> None:
     snap_path = _snapshot(tmp_path, "a")
     network_id, stored = store_exchange_snapshot(snap_path, network_dir=tmp_path / "network")
@@ -98,6 +114,21 @@ def test_pull_exchange_snapshots_framework_filter(tmp_path: Path) -> None:
     )
     assert len(pulled) == 1
     assert pulled[0].name.endswith(".bp.json")
+
+
+def test_pull_exchange_snapshots_attack_class_filter(tmp_path: Path) -> None:
+    n = tmp_path / "network"
+    p1 = _snapshot_with_class(tmp_path, "a", "tool-result-injection")
+    p2 = _snapshot_with_class(tmp_path, "b", "other-class")
+    store_exchange_snapshot(p1, network_dir=n)
+    store_exchange_snapshot(p2, network_dir=n)
+
+    pulled = pull_exchange_snapshots(
+        network_dir=n,
+        out_dir=tmp_path / "pulled",
+        attack_class="tool-result-injection",
+    )
+    assert len(pulled) == 1
 
 
 def test_write_and_read_last_pull_since(tmp_path: Path) -> None:

@@ -1326,6 +1326,12 @@ def network_pull(
         help="Filter pulled network snapshots by framework tag (e.g. langchain, langgraph).",
         show_default=False,
     ),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--class",
+        help="Filter pulled network snapshots by attack class tag (e.g. tool-result-injection).",
+        show_default=False,
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1354,6 +1360,7 @@ def network_pull(
         out_dir=pulled_dir,
         since=effective_since,
         framework=framework,
+        attack_class=attack_class,
     )
     if pulled:
         typer.echo(typer.style(f"Downloaded {len(pulled)} network snapshot(s).", fg="green"))
@@ -1362,6 +1369,8 @@ def network_pull(
             typer.echo(f"  Since: {effective_since}")
         if framework:
             typer.echo(f"  Framework filter: {framework}")
+        if attack_class:
+            typer.echo(f"  Class filter: {attack_class}")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         write_network_state(
             network_dir=network_dir,
@@ -1435,6 +1444,12 @@ def network_push(
         help="Attach a framework tag (e.g. langchain, langgraph, assistants, anthropic).",
         show_default=False,
     ),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--attack-class",
+        help="Attach attack class tag (e.g. tool-result-injection).",
+        show_default=False,
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1457,6 +1472,14 @@ def network_push(
         framework_tag = f"framework:{framework.lower()}"
         if framework_tag not in {str(t).lower() for t in tags}:
             tags.append(framework_tag)
+            snap = snap.model_copy(update={"metadata": snap.metadata.model_copy(update={"tags": tags})})
+            candidate = snap.save_to_file(candidate)
+    if attack_class:
+        snap = AttackSnapshot.load_from_file(candidate)
+        tags = list(snap.metadata.tags)
+        class_tag = f"class:{attack_class.lower()}"
+        if class_tag not in {str(t).lower() for t in tags}:
+            tags.append(class_tag)
             snap = snap.model_copy(update={"metadata": snap.metadata.model_copy(update={"tags": tags})})
             candidate = snap.save_to_file(candidate)
 
