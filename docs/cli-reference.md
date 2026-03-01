@@ -2,6 +2,25 @@
 
 All commands: `vigil <group> <command> [options]`.
 
+## `vigil network`
+
+Network snapshot sync commands.
+
+### `vigil network pull`
+
+```
+vigil network pull --community [--attacks-dir DIR]
+```
+
+Pulls community attack snapshots into your local attacks directory in one command.
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--community` | required | Pull from the built-in community snapshot library. |
+| `--attacks-dir` | `.vigil-data/attacks/` | Destination directory for pulled `.bp.json` snapshots. |
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.

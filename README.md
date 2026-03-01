@@ -37,6 +37,9 @@ vigil forensics scan \
   --format otel \
   --attacks-dir ./tests/attacks/
 
+# (Week 2) Pull seed community attacks in one command
+vigil network pull --community
+
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt
 # → BLOCK: still vulnerable

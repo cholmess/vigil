@@ -69,3 +69,13 @@ def test_vigil_test_report_writes_json(monkeypatch, tmp_path: Path) -> None:
         assert payload["shield_score"]["blocked_attacks"] == 1
         assert payload["breakdown"]["by_technique"]["indirect_rag"] == 1
         assert len(payload["results"]) == 2
+
+
+def test_vigil_network_pull_community_imports_snapshots(tmp_path: Path) -> None:
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        result = runner.invoke(app, ["network", "pull", "--community"])
+        assert result.exit_code == 0
+
+        attacks_dir = Path("tests/attacks")
+        assert attacks_dir.exists()
+        assert len(list(attacks_dir.glob("*.bp.json"))) >= 1

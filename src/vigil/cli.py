@@ -36,6 +36,17 @@ app = typer.Typer(
 )
 
 # --------------------------------------------------------------------------- #
+# vigil network  (sub-app)                                                    #
+# --------------------------------------------------------------------------- #
+
+network_app = typer.Typer(
+    name="network",
+    help="Sync attack snapshots from the Vigil network.",
+    no_args_is_help=True,
+)
+app.add_typer(network_app, name="network")
+
+# --------------------------------------------------------------------------- #
 # vigil forensics  (sub-app)                                                  #
 # --------------------------------------------------------------------------- #
 
@@ -906,6 +917,48 @@ def audit(
     """Deprecated alias for `vigil forensics scan`. Use that instead."""
     typer.echo(typer.style("Note: `vigil audit` is deprecated — use `vigil forensics scan`.", fg="yellow"))
     forensics_scan(logs=logs, format=format, attacks_dir=attacks_dir, registry=None, since=None, until=None)
+
+
+# --------------------------------------------------------------------------- #
+# vigil network pull                                                          #
+# --------------------------------------------------------------------------- #
+
+@network_app.command("pull")
+def network_pull(
+    community: bool = typer.Option(
+        False,
+        "--community",
+        help="Pull snapshots from the built-in community attack library.",
+        is_flag=True,
+    ),
+    attacks_dir: Optional[Path] = typer.Option(
+        None, "--attacks-dir",
+        help="Destination directory for pulled snapshots. Falls back to paths.attacks in .vigil.yml.",
+        show_default=False,
+    ),
+) -> None:
+    """Pull attack snapshots from the Vigil network."""
+    if not community:
+        typer.echo(
+            typer.style(
+                "Error: choose a source. For now, use `vigil network pull --community`.",
+                fg="red",
+            ),
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    cfg = VigilConfig.load()
+    effective_attacks, from_cfg = _resolve_path(attacks_dir, cfg.paths.attacks, Path("./tests/attacks"))
+
+    copied = import_community_attacks(effective_attacks)
+    if copied:
+        typer.echo(typer.style(f"Downloaded {len(copied)} community snapshot(s).", fg="green"))
+        typer.echo(f"  Destination: {effective_attacks}{_source_label(from_cfg)}")
+        typer.echo("  Run `vigil test --network` equivalent:")
+        typer.echo(f"    vigil test --attacks-dir {effective_attacks} --prompt-file <file>")
+    else:
+        typer.echo(typer.style("No community snapshots available.", fg="yellow"))
 
 
 # --------------------------------------------------------------------------- #
