@@ -32,6 +32,9 @@ pip install vigil
 # Run the full demo (< 3 minutes)
 cd examples/full_loop_demo
 ./run_loop.sh
+
+# Run the end-to-end moonshot path (loop + network + train artifacts)
+./run_end_to_end.sh
 ```
 
 ## Expected Output
