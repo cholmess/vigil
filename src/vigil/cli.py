@@ -42,6 +42,7 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
+from vigil.network.intel import load_manifest_records, technique_trends
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -1462,6 +1463,48 @@ def network_push(
     network_id, stored = store_exchange_snapshot(candidate, network_dir=network_dir)
     typer.echo(typer.style(f"Submitted snapshot. Network ID: {network_id}", fg="green"))
     typer.echo(f"  Stored at: {stored}")
+
+
+@network_app.command("intel")
+def network_intel(
+    days: int = typer.Option(7, "--days", help="Comparison window in days."),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Show trending attack techniques from local exchange history."""
+    if days <= 0:
+        typer.echo(typer.style("Error: --days must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    records = load_manifest_records(network_dir=network_dir)
+    if not records:
+        typer.echo(typer.style("No exchange records available yet.", fg="yellow"))
+        return
+
+    trends = technique_trends(records, days=days)
+    if not trends:
+        typer.echo(typer.style("No trend data available for the selected period.", fg="yellow"))
+        return
+
+    _echo_sep("Vigil Threat Intel")
+    typer.echo(f"  Window: last {days} days vs previous {days} days")
+    typer.echo(f"  Records: {len(records)}")
+    _echo_sep()
+
+    top = [row for row in trends if row["current"] > 0][:5]
+    if not top:
+        typer.echo("  No current-period activity.")
+        return
+
+    for row in top:
+        arrow = "↑" if row["delta"] > 0 else ("↓" if row["delta"] < 0 else "→")
+        typer.echo(
+            f"  {row['technique']:<16} current={row['current']:<3} "
+            f"prev={row['previous']:<3} delta={arrow}{abs(row['delta'])}"
+        )
 
 
 # --------------------------------------------------------------------------- #

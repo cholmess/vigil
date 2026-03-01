@@ -40,6 +40,14 @@ vigil network push SNAPSHOT.bp.json [--sanitize] [--term TERM ...] [--framework 
 
 Sanitizes (by default), assigns a network ID (`VN-YYYY-xxxxx`), and stores the snapshot in the local exchange under `.vigil-data/network/exchange/`.
 
+### `vigil network intel`
+
+```
+vigil network intel [--days 7]
+```
+
+Displays trending attack techniques over the last `N` days vs the previous `N` days using local exchange manifest history.
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.
