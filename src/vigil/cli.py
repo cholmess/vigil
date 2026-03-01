@@ -16,6 +16,7 @@ import typer
 
 from vigil.config import VigilConfig
 from vigil.forensics.engine import VigilForensicsWrapper
+from vigil.models import AttackSnapshot
 from vigil.loop.library import (
     import_attacks,
     import_community_attacks,
@@ -1127,6 +1128,12 @@ def network_pull(
         help="Pull network snapshots submitted on/after this ISO date (e.g. 2026-01-01).",
         show_default=False,
     ),
+    framework: Optional[str] = typer.Option(
+        None,
+        "--framework",
+        help="Filter pulled network snapshots by framework tag (e.g. langchain, langgraph).",
+        show_default=False,
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1150,12 +1157,19 @@ def network_pull(
 
     pulled_dir = attacks_dir or Path(".vigil-data/network/pulled")
     effective_since = since or read_last_pull_since(network_dir=network_dir)
-    pulled = pull_exchange_snapshots(network_dir=network_dir, out_dir=pulled_dir, since=effective_since)
+    pulled = pull_exchange_snapshots(
+        network_dir=network_dir,
+        out_dir=pulled_dir,
+        since=effective_since,
+        framework=framework,
+    )
     if pulled:
         typer.echo(typer.style(f"Downloaded {len(pulled)} network snapshot(s).", fg="green"))
         typer.echo(f"  Destination: {pulled_dir}")
         if effective_since:
             typer.echo(f"  Since: {effective_since}")
+        if framework:
+            typer.echo(f"  Framework filter: {framework}")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         write_network_state(
             network_dir=network_dir,
@@ -1223,6 +1237,12 @@ def network_push(
         "--term",
         help="Company-specific term to redact during sanitization.",
     ),
+    framework: Optional[str] = typer.Option(
+        None,
+        "--framework",
+        help="Attach a framework tag (e.g. langchain, langgraph, assistants, anthropic).",
+        show_default=False,
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1238,6 +1258,15 @@ def network_push(
     if sanitize:
         staging = network_dir / "staging"
         candidate = sanitize_snapshot_file(snapshot, out_dir=staging, terms=term)
+
+    if framework:
+        snap = AttackSnapshot.load_from_file(candidate)
+        tags = list(snap.metadata.tags)
+        framework_tag = f"framework:{framework.lower()}"
+        if framework_tag not in {str(t).lower() for t in tags}:
+            tags.append(framework_tag)
+            snap = snap.model_copy(update={"metadata": snap.metadata.model_copy(update={"tags": tags})})
+            candidate = snap.save_to_file(candidate)
 
     network_id, stored = store_exchange_snapshot(candidate, network_dir=network_dir)
     typer.echo(typer.style(f"Submitted snapshot. Network ID: {network_id}", fg="green"))

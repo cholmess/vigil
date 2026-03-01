@@ -30,6 +30,22 @@ def _snapshot(tmp_path: Path, name: str) -> Path:
     return snap.save_to_file(tmp_path / name)
 
 
+def _snapshot_with_framework(tmp_path: Path, name: str, framework: str) -> Path:
+    snap = AttackSnapshot(
+        vigil_version="0.1.0",
+        metadata=SnapshotMetadata(
+            snapshot_id=name,
+            source="community",
+            severity="high",
+            technique="direct_injection",
+            tags=[f"framework:{framework}"],
+        ),
+        canary=Canary(token_type="api_key"),
+        attack=Attack(conversation=[Message(role="user", content="x")]),
+    )
+    return snap.save_to_file(tmp_path / name)
+
+
 def test_store_exchange_snapshot_assigns_network_id(tmp_path: Path) -> None:
     snap_path = _snapshot(tmp_path, "a")
     network_id, stored = store_exchange_snapshot(snap_path, network_dir=tmp_path / "network")
@@ -66,6 +82,22 @@ def test_pull_exchange_snapshots_respects_since_filter(tmp_path: Path) -> None:
         since="2999-01-01",
     )
     assert pulled == []
+
+
+def test_pull_exchange_snapshots_framework_filter(tmp_path: Path) -> None:
+    n = tmp_path / "network"
+    p1 = _snapshot_with_framework(tmp_path, "a", "langchain")
+    p2 = _snapshot_with_framework(tmp_path, "b", "langgraph")
+    store_exchange_snapshot(p1, network_dir=n)
+    store_exchange_snapshot(p2, network_dir=n)
+
+    pulled = pull_exchange_snapshots(
+        network_dir=n,
+        out_dir=tmp_path / "pulled",
+        framework="langgraph",
+    )
+    assert len(pulled) == 1
+    assert pulled[0].name.endswith(".bp.json")
 
 
 def test_write_and_read_last_pull_since(tmp_path: Path) -> None:

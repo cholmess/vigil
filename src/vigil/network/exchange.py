@@ -44,6 +44,11 @@ def store_exchange_snapshot(snapshot_file: str | Path, *, network_dir: str | Pat
         "snapshot_id": snapshot.metadata.snapshot_id,
         "severity": snapshot.metadata.severity,
         "technique": snapshot.metadata.technique.value,
+        "frameworks": [
+            str(tag).split("framework:", 1)[1]
+            for tag in snapshot.metadata.tags
+            if str(tag).startswith("framework:")
+        ],
     }
     with manifest.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
@@ -73,6 +78,7 @@ def pull_exchange_snapshots(
     network_dir: str | Path = ".vigil-data/network",
     out_dir: str | Path = ".vigil-data/network/pulled",
     since: str | None = None,
+    framework: str | None = None,
 ) -> list[Path]:
     """
     Pull snapshots from local exchange manifest into out_dir.
@@ -101,6 +107,10 @@ def pull_exchange_snapshots(
         submitted = _parse_iso8601(str(record.get("submitted_at", "")))
         if since_dt is not None and (submitted is None or submitted < since_dt):
             continue
+        if framework:
+            frameworks = {str(x).lower() for x in (record.get("frameworks") or [])}
+            if framework.lower() not in frameworks:
+                continue
 
         src = Path(str(record.get("file", "")))
         if not src.exists():
