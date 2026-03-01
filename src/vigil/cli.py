@@ -43,7 +43,12 @@ from vigil.network.exchange import (
     store_exchange_snapshot,
     write_network_state,
 )
-from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl, split_corpus_jsonl
+from vigil.network.corpus import (
+    build_corpus_stats,
+    export_corpus_jsonl,
+    split_corpus_jsonl,
+    validate_corpus_jsonl,
+)
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import (
     build_threat_alert,
@@ -2297,6 +2302,42 @@ def train_stats(
     typer.echo(f"  Severities: {dist['severities']}")
     typer.echo(f"  Classes:    {dist['attack_classes']}")
     typer.echo(f"  Frameworks: {dist['frameworks']}")
+
+
+@train_app.command("validate")
+def train_validate(
+    corpus_file: Path = typer.Option(
+        Path(".vigil-data/train/corpus.jsonl"),
+        "--corpus-file",
+        help="Corpus JSONL file to validate.",
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for validation payload."),
+) -> None:
+    """Validate corpus JSONL structure before model training."""
+    payload = validate_corpus_jsonl(corpus_file=corpus_file)
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Validation report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Validate")
+        typer.echo(f"  Corpus: {corpus_file}")
+        typer.echo(f"  Rows: {payload['rows']}")
+        typer.echo(f"  Invalid rows: {payload['invalid_rows']}")
+        typer.echo(f"  Status: {'OK' if payload['ok'] else 'FAIL'}")
+        if payload["errors"]:
+            typer.echo("")
+            typer.echo("  Errors:")
+            for err in payload["errors"][:10]:
+                typer.echo(f"    - {err}")
+
+    if not payload["ok"]:
+        raise typer.Exit(code=1)
 
 
 @network_app.command("remote-pull")

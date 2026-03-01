@@ -220,6 +220,19 @@ def test_train_prepare_with_val_ratio_writes_split(tmp_path: Path) -> None:
         assert report["split"]["val_ratio"] == 0.25
 
 
+def test_train_validate_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.validate_corpus_jsonl",
+        lambda corpus_file: {"ok": True, "rows": 10, "invalid_rows": 0, "errors": []},
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("validate.json")
+        result = runner.invoke(app, ["train", "validate", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

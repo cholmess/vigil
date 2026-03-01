@@ -6,7 +6,12 @@ import json
 from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, BreakPointTest, Canary, Message, SnapshotMetadata
-from vigil.network.corpus import build_corpus_stats, export_corpus_jsonl, split_corpus_jsonl
+from vigil.network.corpus import (
+    build_corpus_stats,
+    export_corpus_jsonl,
+    split_corpus_jsonl,
+    validate_corpus_jsonl,
+)
 from vigil.network.exchange import store_exchange_snapshot
 
 
@@ -107,3 +112,12 @@ def test_split_corpus_jsonl_writes_train_and_val(tmp_path: Path) -> None:
     assert val_file.exists()
     assert train_rows + val_rows == 4
     assert val_rows >= 1
+
+
+def test_validate_corpus_jsonl_flags_missing_fields(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus.jsonl"
+    corpus.write_text('{"snapshot_id":"a","technique":"jailbreak","conversation":[]}\n{"snapshot_id":"b"}\n', encoding="utf-8")
+    payload = validate_corpus_jsonl(corpus_file=corpus)
+    assert payload["rows"] == 2
+    assert payload["invalid_rows"] == 2
+    assert payload["ok"] is False

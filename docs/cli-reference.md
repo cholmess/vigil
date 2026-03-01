@@ -24,6 +24,14 @@ vigil train stats [--since YYYY-MM-DD] [--framework NAME] [--class NAME] [--form
 
 Shows corpus readiness stats from exchange history: total records, time range, techniques, severities, classes, frameworks, and anonymized organization coverage.
 
+### `vigil train validate`
+
+```
+vigil train validate [--corpus-file PATH] [--format text|json] [--out PATH]
+```
+
+Validates `corpus.jsonl` structure for training readiness (required fields and JSON row integrity). Exits non-zero when invalid rows are found.
+
 ## `vigil network`
 
 Network snapshot sync commands.

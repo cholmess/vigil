@@ -61,6 +61,7 @@ vigil train prepare --out-dir ./.vigil-data/train
 vigil train prepare --out-dir ./.vigil-data/train --prompt-file system_prompt.txt
 vigil train prepare --out-dir ./.vigil-data/train --val-ratio 0.2 --seed 42
 vigil train stats --format json --out ./.vigil-data/train/stats.json
+vigil train validate --corpus-file ./.vigil-data/train/corpus.jsonl
 
 # 2) Test current system prompt against every known attack
 vigil test --prompt-file system_prompt.txt

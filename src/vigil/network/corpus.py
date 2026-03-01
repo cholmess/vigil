@@ -222,3 +222,54 @@ def split_corpus_jsonl(
     train_path.write_text("\n".join(train_rows) + ("\n" if train_rows else ""), encoding="utf-8")
     val_path.write_text("\n".join(val_rows) + ("\n" if val_rows else ""), encoding="utf-8")
     return train_path, val_path, len(train_rows), len(val_rows)
+
+
+def validate_corpus_jsonl(
+    *,
+    corpus_file: str | Path,
+) -> dict[str, Any]:
+    """Validate corpus JSONL rows for required training fields."""
+    path = Path(corpus_file)
+    if not path.exists():
+        return {
+            "ok": False,
+            "rows": 0,
+            "invalid_rows": 0,
+            "errors": [f"file_not_found:{path}"],
+        }
+
+    errors: list[str] = []
+    rows = 0
+    invalid = 0
+    required = ("snapshot_id", "technique", "conversation")
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        raw = line.strip()
+        if not raw:
+            continue
+        rows += 1
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            invalid += 1
+            errors.append(f"line_{lineno}:invalid_json")
+            continue
+        if not isinstance(data, dict):
+            invalid += 1
+            errors.append(f"line_{lineno}:invalid_type")
+            continue
+        missing = [key for key in required if not data.get(key)]
+        if missing:
+            invalid += 1
+            errors.append(f"line_{lineno}:missing_{','.join(missing)}")
+            continue
+        if not isinstance(data.get("conversation"), list):
+            invalid += 1
+            errors.append(f"line_{lineno}:conversation_not_list")
+            continue
+
+    return {
+        "ok": invalid == 0 and rows > 0,
+        "rows": rows,
+        "invalid_rows": invalid,
+        "errors": errors[:50],
+    }
