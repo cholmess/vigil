@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from vigil.models import (
     Attack,
@@ -53,7 +54,7 @@ def _full_snapshot() -> AttackSnapshot:
     """Fully populated snapshot covering every field in the spec."""
     return AttackSnapshot(
         vigil_version="0.1.0",
-        snapshot_version="1",
+        snapshot_version="1.1",
         snapshot_type="attack",
         metadata=SnapshotMetadata(
             snapshot_id="snap-full-001",
@@ -61,6 +62,7 @@ def _full_snapshot() -> AttackSnapshot:
             source="canari",
             source_version="0.1.1",
             severity="high",
+            technique="indirect_rag",
             tags=["prompt_injection", "context_dump", "stripe_key"],
         ),
         origin=SnapshotOrigin(
@@ -130,7 +132,7 @@ class TestRoundTripInMemory:
 
         # Top-level
         assert restored.vigil_version == "0.1.0"
-        assert restored.snapshot_version == "1"
+        assert restored.snapshot_version == "1.1"
         assert restored.snapshot_type == "attack"
 
         # Metadata
@@ -139,6 +141,7 @@ class TestRoundTripInMemory:
         assert restored.metadata.source == "canari"
         assert restored.metadata.source_version == "0.1.1"
         assert restored.metadata.severity == "high"
+        assert restored.metadata.technique.value == "indirect_rag"
         assert restored.metadata.tags == ["prompt_injection", "context_dump", "stripe_key"]
 
         # Origin
@@ -185,7 +188,7 @@ class TestRoundTripInMemory:
         raw = snap.model_dump_json(indent=2)
         parsed = json.loads(raw)
         assert parsed["vigil_version"] == "0.1.0"
-        assert parsed["snapshot_version"] == "1"
+        assert parsed["snapshot_version"] == "1.1"
 
     def test_optional_fields_absent_in_minimal(self) -> None:
         snap = _minimal_snapshot()
@@ -202,7 +205,40 @@ class TestRoundTripInMemory:
 
     def test_snapshot_version_default(self) -> None:
         snap = _minimal_snapshot()
-        assert snap.snapshot_version == "1"
+        assert snap.snapshot_version == "1.1"
+
+    def test_metadata_technique_default_unknown(self) -> None:
+        snap = _minimal_snapshot()
+        assert snap.metadata.technique.value == "unknown"
+
+    def test_back_compat_snapshot_v1_without_technique_loads(self) -> None:
+        payload = {
+            "vigil_version": "0.1.0",
+            "snapshot_version": "1",
+            "snapshot_type": "attack",
+            "metadata": {
+                "snapshot_id": "legacy-001",
+                "source": "community",
+            },
+            "canary": {"token_type": "api_key"},
+            "attack": {"conversation": [{"role": "user", "content": "legacy attack"}]},
+        }
+        restored = AttackSnapshot.model_validate_json(json.dumps(payload))
+        assert restored.snapshot_version == "1"
+        assert restored.metadata.technique.value == "unknown"
+
+    def test_invalid_technique_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            AttackSnapshot(
+                vigil_version="0.1.0",
+                metadata=SnapshotMetadata(
+                    snapshot_id="bad-technique",
+                    source="canari",
+                    technique="not_valid_technique",
+                ),
+                canary=Canary(token_type="api_key"),
+                attack=Attack(conversation=[Message(role="user", content="x")]),
+            )
 
     def test_snapshot_type_default(self) -> None:
         snap = _minimal_snapshot()

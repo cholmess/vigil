@@ -251,6 +251,8 @@ class TestVigilBreakPointRunner:
         r = result["results"][0]
         assert r["file"] == "my-snap.bp.json"
         assert r["snapshot_id"] == "my-snap"
+        assert r["severity"] == "unknown"
+        assert r["technique"] == "unknown"
         assert r["status"] == "ALLOW"
 
     @patch("vigil.loop.replayer.evaluate")

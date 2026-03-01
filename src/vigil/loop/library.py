@@ -24,6 +24,7 @@ def list_attacks(attacks_dir: str | Path) -> list[dict]:
                     "snapshot_id": meta.get("snapshot_id", "?"),
                     "source": meta.get("source", "?"),
                     "severity": meta.get("severity", "?"),
+                    "technique": meta.get("technique", "unknown"),
                     "tags": meta.get("tags", []),
                     "description": (data.get("breakpoint_test") or {}).get("description", ""),
                 }

@@ -1,6 +1,6 @@
 # .bp.json Snapshot Format
 
-Version: `1`
+Version: `1.1`
 
 The `.bp.json` file is the shared contract between Canari, Canari Forensics,
 and BreakPoint. Every component reads and writes this format.
@@ -11,7 +11,7 @@ Treat it as a stable API.
 ```json
 {
   "vigil_version": "0.1.0",
-  "snapshot_version": "1",
+  "snapshot_version": "1.1",
   "snapshot_type": "attack",
 
   "metadata": {
@@ -20,6 +20,7 @@ Treat it as a stable API.
     "source": "canari",
     "source_version": "0.1.1",
     "severity": "high",
+    "technique": "indirect_rag",
     "tags": ["prompt_injection", "context_dump", "stripe_key"]
   },
 
@@ -80,7 +81,7 @@ Treat it as a stable API.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `vigil_version` | string | yes | Vigil package version that produced this file. |
-| `snapshot_version` | string | yes | Format version. Current: `"1"`. Increment on breaking changes. |
+| `snapshot_version` | string | yes | Format version. Current: `"1.1"`. Increment on breaking changes. |
 | `snapshot_type` | string | yes | Always `"attack"` for this format. |
 | `metadata` | object | yes | Identification and classification. |
 | `origin` | object | no | Where and when the attack was captured. |
@@ -98,6 +99,7 @@ Treat it as a stable API.
 | `source` | string | yes | `"canari"` \| `"forensics"` \| `"community"` |
 | `source_version` | string | no | Version of the producing package. |
 | `severity` | string | no | `"low"` \| `"medium"` \| `"high"` \| `"critical"` |
+| `technique` | string | no | `"unknown"` \| `"direct_injection"` \| `"indirect_rag"` \| `"multi_turn"` \| `"prompt_leakage"` \| `"jailbreak"` \| `"agent_hijacking"` \| `"tool_injection"` |
 | `tags` | array[string] | no | Free-form labels, e.g. `["prompt_injection", "stripe_key"]`. |
 
 ### `origin`
@@ -183,8 +185,9 @@ Any other extension passed to `save_to_file` is replaced.
 
 ## Versioning
 
-- `snapshot_version` is currently `"1"`.
-- New optional fields can be added in a minor update without changing the version.
+- `snapshot_version` is currently `"1.1"`.
+- `snapshot_version = "1"` snapshots remain valid and load with `metadata.technique = "unknown"` when the field is missing.
+- New optional fields can be added in a minor update without changing the major version.
 - Removing or renaming any required field requires bumping `snapshot_version` to `"2"`.
 - Consumers must not break on unknown optional fields — treat them as pass-through.
 

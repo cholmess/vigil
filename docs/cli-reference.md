@@ -113,7 +113,7 @@ Generates a compliance report for the completed scan.
 Regression suite replay using `vigil.breakpoint`.
 
 ```
-vigil test [--attacks-dir DIR] [--prompt-file PATH] [--fail-on allow|warn|block]
+vigil test [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--report]
 ```
 
 Loads every `.bp.json` from `--attacks-dir` (default: `.vigil-data/attacks/`),
@@ -125,16 +125,17 @@ extracts the captured LLM response, and evaluates it against the baseline using
 | Flag | Default | Description |
 |---|---|---|
 | `--attacks-dir` | `.vigil-data/attacks/` | Directory containing `.bp.json` snapshots. |
-| `--prompt-file` | none | Path to a system prompt file. Used as the baseline when `breakpoint_test.baseline.output` is absent from a snapshot. |
-| `--fail-on` | `block` | Exit with non-zero when any snapshot hits this verdict or worse. |
+| `--prompt-file` | none | Path to a system prompt file. |
+| `--prompt` | none | Inline system prompt string (mutually exclusive with `--prompt-file`). |
+| `--report` | disabled | Writes `./vigil-report.json` with shield score and per-snapshot results. |
 
 **Exit codes:**
 
 | Code | Meaning |
 |---|---|
-| `0` | All snapshots ALLOW |
-| `1` | At least one WARN, none BLOCK |
-| `2` | At least one BLOCK |
+| `0` | All snapshots ALLOW, or WARN-only outcomes |
+| `1` | At least one BLOCK (vulnerable) |
+| `2` | Runtime/configuration error |
 
 **Output (per snapshot):**
 ```

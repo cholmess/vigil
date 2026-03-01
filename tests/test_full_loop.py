@@ -412,7 +412,7 @@ class TestSnapshotRoundtrip:
     def test_roundtrip_serialization(self, source: str, tmp_path: Path):
         snap = AttackSnapshot(
             vigil_version="0.1.0",
-            snapshot_version="1",
+            snapshot_version="1.1",
             snapshot_type="attack",
             metadata=SnapshotMetadata(
                 snapshot_id=f"test-{source}-001",

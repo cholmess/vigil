@@ -112,7 +112,7 @@ class VigilCanariWrapper:
 
         snapshot = AttackSnapshot(
             vigil_version=_VIGIL_VERSION,
-            snapshot_version="1",
+            snapshot_version="1.1",
             snapshot_type="attack",
             metadata=SnapshotMetadata(
                 snapshot_id=snapshot_id,
@@ -120,6 +120,7 @@ class VigilCanariWrapper:
                 source="canari",
                 source_version=None,
                 severity=severity_str,
+                technique="prompt_leakage",
                 tags=[token_type_str, "prompt_injection"],
             ),
             origin=SnapshotOrigin(

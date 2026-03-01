@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -190,6 +191,49 @@ def _save_scan(scan_id: str, payload: dict) -> Path:
     _SCAN_STORE.mkdir(parents=True, exist_ok=True)
     path = _SCAN_STORE / f"{scan_id}.json"
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    return path
+
+
+def _build_test_report(summary: dict) -> dict:
+    total = int(summary.get("total", 0))
+    allowed = int(summary.get("allowed", 0))
+    warned = int(summary.get("warned", 0))
+    blocked = int(summary.get("blocked", 0))
+    errors = int(summary.get("errors", 0))
+    results = list(summary.get("results", []))
+
+    denominator = total if total > 0 else 1
+    shield_pct = round((allowed / denominator) * 100, 2)
+
+    severity_counts = Counter(r.get("severity", "unknown") for r in results)
+    technique_counts = Counter(r.get("technique", "unknown") for r in results)
+
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "shield_score": {
+            "blocked_attacks": allowed,
+            "total_attacks": total,
+            "percent": shield_pct,
+        },
+        "summary": {
+            "total": total,
+            "allowed": allowed,
+            "warned": warned,
+            "blocked": blocked,
+            "errors": errors,
+        },
+        "breakdown": {
+            "by_severity": dict(sorted(severity_counts.items())),
+            "by_technique": dict(sorted(technique_counts.items())),
+        },
+        "results": results,
+    }
+
+
+def _write_test_report(path: Path, summary: dict) -> Path:
+    payload = _build_test_report(summary)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
 
 
@@ -742,6 +786,11 @@ def test(
         help="Path to a file containing the current system prompt.",
         show_default=False,
     ),
+    report: bool = typer.Option(
+        False,
+        "--report",
+        help="Write a JSON report to ./vigil-report.json.",
+    ),
 ) -> None:
     """Replay every .bp.json attack snapshot against your current system prompt using BreakPoint.
 
@@ -813,6 +862,11 @@ def test(
         typer.echo(f"  Parse errors:     {errors}")
 
     _echo_sep()
+
+    if report:
+        report_path = _write_test_report(Path("vigil-report.json"), summary)
+        typer.echo(f"  JSON report:     {report_path}")
+        _echo_sep()
 
     if blocked > 0:
         typer.echo(

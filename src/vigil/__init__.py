@@ -15,6 +15,7 @@ from vigil.loop.exporter import VigilCanariWrapper
 from vigil.loop.replayer import VigilBreakPointRunner
 from vigil.models import (
     Attack,
+    AttackTechnique,
     AttackSnapshot,
     BreakPointBaseline,
     BreakPointTest,
@@ -31,6 +32,7 @@ __all__ = [
     # Core models
     "AttackSnapshot",
     "Attack",
+    "AttackTechnique",
     "Canary",
     "Message",
     "SnapshotMetadata",

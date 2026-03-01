@@ -24,6 +24,8 @@ _HARDENING_MARKERS = (
 class AttackResult(TypedDict):
     file: str
     snapshot_id: str
+    severity: str
+    technique: str
     attack_prompt: str         # malicious user input
     candidate_output: str      # LLM response that was evaluated
     status: str                # "ALLOW" | "WARN" | "BLOCK"
@@ -97,6 +99,8 @@ class VigilBreakPointRunner:
                 AttackResult(
                     file=bp_file.name,
                     snapshot_id=snapshot.metadata.snapshot_id,
+                    severity=(snapshot.metadata.severity or "unknown").lower(),
+                    technique=snapshot.metadata.technique.value,
                     attack_prompt=attack_prompt,
                     candidate_output=candidate_output,
                     status=decision.status,

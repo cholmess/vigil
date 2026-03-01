@@ -103,6 +103,8 @@ class TestVigilCanariWrapper:
         snap = AttackSnapshot.load_from_file(path)
 
         assert snap.metadata.source == "canari"
+        assert snap.snapshot_version == "1.1"
+        assert snap.metadata.technique.value == "prompt_leakage"
 
     def test_snapshot_has_origin_block(self, tmp_path: Path) -> None:
         scanner = MagicMock()

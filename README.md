@@ -47,11 +47,35 @@ vigil test --prompt-file system_prompt.txt
 vigil test --prompt-file system_prompt.txt
 # → ALLOW: hardened
 
+# Optional: machine-readable CI artifact
+vigil test --prompt-file system_prompt.txt --report
+# → writes ./vigil-report.json
+
 # 5) Commit the snapshot as a permanent regression test
 git add system_prompt.txt tests/attacks/
 git commit -m "harden prompt against context dump (inc-conv-abc123)"
 git push
 # → CI runs full suite → green
+```
+
+## GitHub Action (local)
+
+Use the local action in this repository:
+
+```yaml
+name: LLM Safety Gate
+on: [pull_request]
+
+jobs:
+  vigil:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/vigil-test
+        with:
+          prompt-file: system_prompt.txt
+          attacks-dir: tests/attacks
+          report: "true"
 ```
 
 ## Forensic audit workflow

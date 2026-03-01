@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,19 @@ class Attack(BaseModel):
 # Metadata block                                                               #
 # --------------------------------------------------------------------------- #
 
+class AttackTechnique(str, Enum):
+    """Closed technique taxonomy for attack snapshots."""
+
+    UNKNOWN = "unknown"
+    DIRECT_INJECTION = "direct_injection"
+    INDIRECT_RAG = "indirect_rag"
+    MULTI_TURN = "multi_turn"
+    PROMPT_LEAKAGE = "prompt_leakage"
+    JAILBREAK = "jailbreak"
+    AGENT_HIJACKING = "agent_hijacking"
+    TOOL_INJECTION = "tool_injection"
+
+
 class SnapshotMetadata(BaseModel):
     """Top-level metadata for a vigil snapshot."""
 
@@ -61,6 +75,14 @@ class SnapshotMetadata(BaseModel):
     severity: Optional[str] = Field(
         default=None,
         description="'low' | 'medium' | 'high' | 'critical'.",
+    )
+    technique: AttackTechnique = Field(
+        default=AttackTechnique.UNKNOWN,
+        description=(
+            "Primary attack technique classification. "
+            "One of: unknown, direct_injection, indirect_rag, multi_turn, "
+            "prompt_leakage, jailbreak, agent_hijacking, tool_injection."
+        ),
     )
     tags: list[str] = Field(
         default_factory=list,
@@ -176,7 +198,7 @@ class AttackSnapshot(BaseModel):
 
     vigil_version: str = Field(..., description="Vigil schema version, e.g. '0.1.0'.")
     snapshot_version: str = Field(
-        default="1", description="Format version; increment on breaking changes."
+        default="1.1", description="Format version; increment on breaking changes."
     )
     snapshot_type: str = Field(
         default="attack", description="Must be 'attack' for this model."

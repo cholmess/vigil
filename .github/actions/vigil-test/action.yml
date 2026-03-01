@@ -1,0 +1,47 @@
+name: Vigil Test Gate
+description: Run vigil test in CI and optionally write vigil-report.json.
+inputs:
+  prompt-file:
+    description: Path to the system prompt file.
+    required: false
+    default: system_prompt.txt
+  attacks-dir:
+    description: Directory containing .bp.json attack snapshots.
+    required: false
+    default: tests/attacks
+  python-version:
+    description: Python version used to run vigil.
+    required: false
+    default: "3.11"
+  report:
+    description: When true, writes vigil-report.json.
+    required: false
+    default: "true"
+outputs:
+  report-path:
+    description: Path to the generated JSON report.
+    value: vigil-report.json
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Vigil
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        pip install .
+
+    - name: Run Vigil test gate
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmd=(vigil test --prompt-file "${{ inputs.prompt-file }}" --attacks-dir "${{ inputs.attacks-dir }}")
+        if [ "${{ inputs.report }}" = "true" ]; then
+          cmd+=(--report)
+        fi
+        "${cmd[@]}"
