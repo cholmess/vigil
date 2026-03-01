@@ -1210,6 +1210,8 @@ def score(
         help="Use .vigil-data/network/pulled as corpus unless --attacks-dir is provided.",
         is_flag=True,
     ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for score payload."),
 ) -> None:
     """Assess empirical vulnerability risk by attack technique."""
     cfg = VigilConfig.load()
@@ -1237,6 +1239,16 @@ def score(
 
     scorer = VulnerabilityScorer(effective_attacks)
     report = scorer.assess(prompt_text)
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(report, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Score report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
 
     _echo_sep("Vulnerability Scorer")
     typer.echo(f"  Corpus: {report['attacks_dir']}")

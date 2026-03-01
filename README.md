@@ -78,6 +78,7 @@ vigil swarm-test \
 
 # Empirical vulnerability scoring (technique/class/framework)
 vigil score --prompt-file system_prompt.txt
+vigil score --prompt-file system_prompt.txt --format json --out ./.vigil-data/train/score.json
 
 # Week 3: diff-aware mode (fast CI loop)
 vigil test --prompt-file system_prompt.txt --diff-aware

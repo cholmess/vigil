@@ -422,3 +422,33 @@ def test_vigil_score_renders_class_and_framework_sections(monkeypatch, tmp_path:
         assert result.exit_code == 0
         assert "Top classes:" in result.output
         assert "Top frameworks:" in result.output
+
+
+def test_vigil_score_json_out_writes_payload(monkeypatch, tmp_path: Path) -> None:
+    class _FakeScorer:
+        def __init__(self, attacks_dir):
+            self.attacks_dir = attacks_dir
+
+        def assess(self, prompt):
+            return {
+                "attacks_dir": str(self.attacks_dir),
+                "total_snapshots": 1,
+                "techniques": {},
+                "classes": {},
+                "frameworks": {},
+                "top_technique": "unknown",
+                "top_class": "unknown",
+                "top_framework": "unknown",
+                "top_recommendation": "n/a",
+            }
+
+    monkeypatch.setattr("vigil.cli.VulnerabilityScorer", _FakeScorer)
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        prompt = Path("system_prompt.txt")
+        prompt.write_text("safe", encoding="utf-8")
+        out = Path("score.json")
+        result = runner.invoke(app, ["score", "--prompt-file", str(prompt), "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["total_snapshots"] == 1
