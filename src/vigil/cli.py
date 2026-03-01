@@ -2541,6 +2541,105 @@ def train_check_split(
         raise typer.Exit(code=1)
 
 
+@train_app.command("curriculum")
+def train_curriculum(
+    corpus_file: Path = typer.Option(
+        Path(".vigil-data/train/corpus.jsonl"),
+        "--corpus-file",
+        help="Corpus JSONL file used for balance signals.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory used for trend signals.",
+    ),
+    days: int = typer.Option(30, "--days", help="Trend window in days for technique momentum."),
+    top: int = typer.Option(5, "--top", help="Maximum techniques to include in the curriculum."),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for curriculum payload."),
+) -> None:
+    """Build a prioritized training curriculum from balance + network trend signals."""
+    if days <= 0:
+        typer.echo(typer.style("Error: --days must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+    if top <= 0:
+        typer.echo(typer.style("Error: --top must be > 0.", fg="red"), err=True)
+        raise typer.Exit(code=2)
+
+    balance = build_corpus_balance(corpus_file=corpus_file)
+    if not balance.get("ok", False):
+        typer.echo(typer.style("Corpus balance analysis failed. Run `vigil train validate` first.", fg="red"), err=True)
+        raise typer.Exit(code=1)
+
+    technique_counts = balance.get("technique_counts", {})
+    suggested_weights = balance.get("suggested_weights", {})
+
+    records = load_manifest_records(network_dir=network_dir)
+    trends = technique_trends(records, days=days) if records else []
+    trend_map = {str(row.get("technique")): row for row in trends}
+
+    techniques = sorted(set(technique_counts) | set(trend_map))
+    positive_deltas = [int((trend_map.get(t) or {}).get("delta", 0)) for t in techniques]
+    max_delta = max([d for d in positive_deltas if d > 0], default=1)
+
+    ranked: list[dict[str, object]] = []
+    for tech in techniques:
+        count = int(technique_counts.get(tech, 0))
+        weight = float(suggested_weights.get(tech, 0.0))
+        trend = trend_map.get(tech, {})
+        current = int(trend.get("current", 0))
+        delta = int(trend.get("delta", 0))
+        momentum = max(0, delta) / max_delta
+        score = round((0.55 * weight) + (0.35 * momentum) + (0.10 * (1.0 if current > 0 else 0.0)), 4)
+        ranked.append(
+            {
+                "technique": tech,
+                "priority_score": score,
+                "sampling_weight": round(weight, 4),
+                "corpus_count": count,
+                "trend_current": current,
+                "trend_delta": delta,
+            }
+        )
+
+    ranked.sort(
+        key=lambda row: (
+            float(row["priority_score"]),
+            int(row["trend_current"]),
+            int(row["corpus_count"]),
+        ),
+        reverse=True,
+    )
+    curriculum = ranked[:top]
+    payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "corpus_file": str(corpus_file),
+        "window_days": days,
+        "top": top,
+        "curriculum": curriculum,
+    }
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Curriculum report written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Curriculum")
+        typer.echo(f"  Corpus: {corpus_file}")
+        typer.echo(f"  Trend window: {days}d")
+        typer.echo(f"  Techniques ranked: {len(curriculum)}")
+        for idx, row in enumerate(curriculum, start=1):
+            typer.echo(
+                f"  [{idx}] {row['technique']:<18} score={row['priority_score']:<5} "
+                f"weight={row['sampling_weight']:<5} corpus={row['corpus_count']:<4} "
+                f"trend={row['trend_current']} (delta {row['trend_delta']:+d})"
+            )
+
+
 @network_app.command("remote-pull")
 def network_remote_pull(
     repo: str = typer.Option(..., "--repo", help="Remote git repository URL/path containing exchange/"),

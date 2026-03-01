@@ -334,6 +334,33 @@ def test_train_check_split_json_output(monkeypatch, tmp_path: Path) -> None:
         assert payload["train_rows"] == 8
 
 
+def test_train_curriculum_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.build_corpus_balance",
+        lambda corpus_file: {
+            "ok": True,
+            "technique_counts": {"jailbreak": 10, "tool_injection": 2},
+            "suggested_weights": {"jailbreak": 0.2, "tool_injection": 1.0},
+        },
+    )
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.technique_trends",
+        lambda records, days=30: [
+            {"technique": "jailbreak", "current": 5, "previous": 3, "delta": 2},
+            {"technique": "tool_injection", "current": 1, "previous": 0, "delta": 1},
+        ],
+    )
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("curriculum.json")
+        result = runner.invoke(app, ["train", "curriculum", "--format", "json", "--out", str(out), "--top", "2"])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert len(payload["curriculum"]) == 2
+        assert payload["curriculum"][0]["technique"] == "tool_injection"
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

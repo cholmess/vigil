@@ -72,6 +72,14 @@ vigil train check-split [--train-file PATH] [--val-file PATH] [--format text|jso
 
 Validates train/val split integrity and fails if `snapshot_id` values overlap between files (leakage check).
 
+### `vigil train curriculum`
+
+```
+vigil train curriculum [--corpus-file PATH] [--network-dir DIR] [--days N] [--top N] [--format text|json] [--out PATH]
+```
+
+Builds a prioritized technique curriculum by combining corpus-balance weights with recent network technique trends.
+
 ## `vigil network`
 
 Network snapshot sync commands.
