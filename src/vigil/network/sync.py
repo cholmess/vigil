@@ -39,10 +39,21 @@ def import_exchange_bundle(
 ) -> dict[str, int]:
     """Merge an exported exchange bundle into local exchange store."""
     src = Path(source_dir) / "exchange"
-    src_manifest = src / "manifest.jsonl"
-    src_snapshots = src / "snapshots"
-
     dst_root = Path(network_dir) / "exchange"
+    return merge_exchange_dirs(source_exchange_dir=src, target_exchange_dir=dst_root)
+
+
+def merge_exchange_dirs(
+    *,
+    source_exchange_dir: str | Path,
+    target_exchange_dir: str | Path,
+) -> dict[str, int]:
+    """Merge one exchange directory into another by network_id."""
+    src_root = Path(source_exchange_dir)
+    src_manifest = src_root / "manifest.jsonl"
+    src_snapshots = src_root / "snapshots"
+
+    dst_root = Path(target_exchange_dir)
     dst_manifest = dst_root / "manifest.jsonl"
     dst_snapshots = dst_root / "snapshots"
     dst_snapshots.mkdir(parents=True, exist_ok=True)

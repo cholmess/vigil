@@ -82,6 +82,22 @@ vigil network import-exchange --in DIR
 
 Imports an exported exchange bundle and merges new records by `network_id`.
 
+### `vigil network remote-pull`
+
+```
+vigil network remote-pull --repo URL_OR_PATH [--branch main]
+```
+
+Clones a remote git repo containing `exchange/` and merges snapshots into local exchange store.
+
+### `vigil network remote-push`
+
+```
+vigil network remote-push --repo URL_OR_PATH [--branch main]
+```
+
+Clones a remote git repo, merges local exchange updates into `exchange/`, commits, and pushes.
+
 ## `vigil forensics`
 
 Forensic scanning and evidence management.

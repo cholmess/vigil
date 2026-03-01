@@ -6,7 +6,7 @@ from pathlib import Path
 
 from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
 from vigil.network.exchange import store_exchange_snapshot
-from vigil.network.sync import export_exchange_bundle, import_exchange_bundle
+from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
 
 
 def _snapshot(tmp_path: Path, name: str) -> Path:
@@ -48,3 +48,17 @@ def test_import_exchange_bundle_merges_and_skips_duplicates(tmp_path: Path) -> N
     assert first["imported"] == 1
     assert second["imported"] == 0
     assert second["skipped"] >= 1
+
+
+def test_merge_exchange_dirs_merges_directories(tmp_path: Path) -> None:
+    source_network = tmp_path / "source_network"
+    target_network = tmp_path / "target_network"
+    snap = _snapshot(tmp_path, "a")
+    store_exchange_snapshot(snap, network_dir=source_network)
+
+    result = merge_exchange_dirs(
+        source_exchange_dir=source_network / "exchange",
+        target_exchange_dir=target_network / "exchange",
+    )
+    assert result["imported"] == 1
+    assert (target_network / "exchange" / "manifest.jsonl").exists()

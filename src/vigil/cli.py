@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
@@ -45,7 +46,7 @@ from vigil.network.exchange import (
 from vigil.network.corpus import export_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import class_trends, load_manifest_records, technique_trends
-from vigil.network.sync import export_exchange_bundle, import_exchange_bundle
+from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
 from vigil.network.sanitizer import sanitize_snapshot_file
 
 # --------------------------------------------------------------------------- #
@@ -299,6 +300,23 @@ def _prompt_diff_text(prompt_file: Path, base_ref: str | None) -> str:
     if proc.returncode != 0:
         return ""
     return proc.stdout
+
+
+def _git_clone_repo(remote: str, dest: Path, branch: str) -> None:
+    """Clone a git repository, preferring a specific branch."""
+    cmd = ["git", "clone", "--depth", "1", "--branch", branch, remote, str(dest)]
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return
+    fallback = subprocess.run(
+        ["git", "clone", "--depth", "1", remote, str(dest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if fallback.returncode != 0:
+        message = proc.stderr.strip() or fallback.stderr.strip() or "git clone failed"
+        raise RuntimeError(message)
 
 
 # --------------------------------------------------------------------------- #
@@ -1787,6 +1805,106 @@ def network_import_exchange(
     typer.echo(typer.style("Exchange import completed.", fg="green"))
     typer.echo(f"  Imported: {result['imported']}")
     typer.echo(f"  Skipped:  {result['skipped']}")
+
+
+@network_app.command("remote-pull")
+def network_remote_pull(
+    repo: str = typer.Option(..., "--repo", help="Remote git repository URL/path containing exchange/"),
+    branch: str = typer.Option("main", "--branch", help="Git branch to pull from."),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Pull exchange data from a remote git repo into local store."""
+    with tempfile.TemporaryDirectory(prefix="vigil-remote-pull-") as td:
+        repo_dir = Path(td) / "repo"
+        try:
+            _git_clone_repo(repo, repo_dir, branch)
+        except RuntimeError as exc:
+            typer.echo(typer.style(f"Error cloning repo: {exc}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        source_exchange = repo_dir / "exchange"
+        if not source_exchange.exists():
+            typer.echo(typer.style("No exchange/ directory found in remote repo.", fg="yellow"))
+            return
+
+        result = merge_exchange_dirs(
+            source_exchange_dir=source_exchange,
+            target_exchange_dir=network_dir / "exchange",
+        )
+        typer.echo(typer.style("Remote exchange pull completed.", fg="green"))
+        typer.echo(f"  Imported: {result['imported']}")
+        typer.echo(f"  Skipped:  {result['skipped']}")
+
+
+@network_app.command("remote-push")
+def network_remote_push(
+    repo: str = typer.Option(..., "--repo", help="Remote git repository URL/path containing exchange/"),
+    branch: str = typer.Option("main", "--branch", help="Git branch to push to."),
+    message: str = typer.Option(
+        "chore(vigil): sync exchange snapshots",
+        "--message",
+        help="Commit message for remote sync.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Push local exchange data into a remote git repo."""
+    with tempfile.TemporaryDirectory(prefix="vigil-remote-push-") as td:
+        repo_dir = Path(td) / "repo"
+        local_export = Path(td) / "export"
+        try:
+            _git_clone_repo(repo, repo_dir, branch)
+        except RuntimeError as exc:
+            typer.echo(typer.style(f"Error cloning repo: {exc}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        export_exchange_bundle(network_dir=network_dir, out_dir=local_export)
+        result = merge_exchange_dirs(
+            source_exchange_dir=local_export / "exchange",
+            target_exchange_dir=repo_dir / "exchange",
+        )
+        if result["imported"] == 0:
+            typer.echo(typer.style("No new exchange snapshots to push.", fg="yellow"))
+            return
+
+        add = subprocess.run(["git", "-C", str(repo_dir), "add", "exchange"], check=False)
+        if add.returncode != 0:
+            typer.echo(typer.style("Error staging exchange changes.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        commit = subprocess.run(
+            ["git", "-C", str(repo_dir), "commit", "-m", message],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if commit.returncode != 0:
+            stderr = (commit.stderr or "").strip()
+            stdout = (commit.stdout or "").strip()
+            details = stderr or stdout or "git commit failed"
+            typer.echo(typer.style(f"Error committing exchange sync: {details}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        push = subprocess.run(
+            ["git", "-C", str(repo_dir), "push", "origin", branch],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if push.returncode != 0:
+            details = (push.stderr or "").strip() or (push.stdout or "").strip() or "git push failed"
+            typer.echo(typer.style(f"Error pushing exchange sync: {details}", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        typer.echo(typer.style("Remote exchange push completed.", fg="green"))
+        typer.echo(f"  Imported into remote: {result['imported']}")
 
 
 # --------------------------------------------------------------------------- #
