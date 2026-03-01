@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import io
 import tarfile
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from vigil.network.corpus import (
     package_train_bundle,
     split_corpus_jsonl,
     validate_corpus_jsonl,
+    verify_train_bundle,
 )
 from vigil.network.exchange import store_exchange_snapshot
 
@@ -144,3 +146,37 @@ def test_package_train_bundle_writes_manifest_and_tar(tmp_path: Path) -> None:
     assert "corpus.jsonl" in names
     assert "prepare-report.json" in names
     assert "bundle-manifest.json" in names
+
+
+def test_verify_train_bundle_passes_for_valid_bundle(tmp_path: Path) -> None:
+    train_dir = tmp_path / "train"
+    train_dir.mkdir(parents=True, exist_ok=True)
+    (train_dir / "corpus.jsonl").write_text('{"snapshot_id":"a","technique":"jailbreak","conversation":[{}]}\n', encoding="utf-8")
+    (train_dir / "prepare-report.json").write_text('{"rows":1}', encoding="utf-8")
+    bundle, _ = package_train_bundle(train_dir=train_dir, out_file=train_dir / "bundle.tar.gz")
+    payload = verify_train_bundle(bundle_file=bundle)
+    assert payload["ok"] is True
+    assert payload["verified_files"] == payload["total_files"]
+
+
+def test_verify_train_bundle_fails_for_tampered_bundle(tmp_path: Path) -> None:
+    train_dir = tmp_path / "train"
+    train_dir.mkdir(parents=True, exist_ok=True)
+    (train_dir / "corpus.jsonl").write_text('{"snapshot_id":"a","technique":"jailbreak","conversation":[{}]}\n', encoding="utf-8")
+    (train_dir / "prepare-report.json").write_text('{"rows":1}', encoding="utf-8")
+    bundle, _ = package_train_bundle(train_dir=train_dir, out_file=train_dir / "bundle.tar.gz")
+
+    # Tamper by rebuilding tar with modified corpus but original manifest.
+    tampered = train_dir / "bundle-tampered.tar.gz"
+    with tarfile.open(bundle, "r:gz") as src:
+        members = {m.name: src.extractfile(m).read() for m in src.getmembers() if m.isfile()}
+    members["corpus.jsonl"] = b'{"snapshot_id":"x","technique":"jailbreak","conversation":[{}]}\n'
+    with tarfile.open(tampered, "w:gz") as out:
+        for name, content in members.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(content)
+            out.addfile(info, fileobj=io.BytesIO(content))
+
+    payload = verify_train_bundle(bundle_file=tampered)
+    assert payload["ok"] is False
+    assert "corpus.jsonl" in payload["mismatched_files"]

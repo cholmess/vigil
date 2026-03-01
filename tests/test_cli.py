@@ -233,6 +233,27 @@ def test_train_validate_json_output(monkeypatch, tmp_path: Path) -> None:
         assert payload["ok"] is True
 
 
+def test_train_verify_bundle_json_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "vigil.cli.verify_train_bundle",
+        lambda bundle_file: {
+            "ok": True,
+            "bundle_file": str(bundle_file),
+            "total_files": 2,
+            "verified_files": 2,
+            "missing_files": [],
+            "mismatched_files": [],
+            "errors": [],
+        },
+    )
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("verify.json")
+        result = runner.invoke(app, ["train", "verify-bundle", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["ok"] is True
+
+
 def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
     monkeypatch.setattr(

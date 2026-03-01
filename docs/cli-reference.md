@@ -40,6 +40,14 @@ vigil train package [--train-dir DIR] [--out PATH]
 
 Packages available training artifacts into a `.tar.gz` bundle and writes `bundle-manifest.json` with per-file checksums.
 
+### `vigil train verify-bundle`
+
+```
+vigil train verify-bundle [--bundle-file PATH] [--format text|json] [--out PATH]
+```
+
+Verifies bundle integrity by checking packaged files against `bundle-manifest.json` SHA-256 checksums. Exits non-zero on mismatch.
+
 ## `vigil network`
 
 Network snapshot sync commands.

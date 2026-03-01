@@ -23,6 +23,7 @@ from vigil.network.corpus import (
     package_train_bundle,
     split_corpus_jsonl,
     validate_corpus_jsonl,
+    verify_train_bundle,
 )
 from vigil.network.sanitizer import sanitize_snapshot, sanitize_snapshot_file
 from vigil.network.digest import summarize_pulled_snapshots
@@ -49,6 +50,7 @@ __all__ = [
     "package_train_bundle",
     "split_corpus_jsonl",
     "validate_corpus_jsonl",
+    "verify_train_bundle",
     "summarize_pulled_snapshots",
     "export_exchange_bundle",
     "import_exchange_bundle",

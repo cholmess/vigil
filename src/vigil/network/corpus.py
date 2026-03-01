@@ -6,6 +6,7 @@ import json
 import random
 import tarfile
 import hashlib
+import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -343,3 +344,80 @@ def package_train_bundle(
                 tar.add(path, arcname=rel)
         tar.add(manifest_path, arcname="bundle-manifest.json")
     return output, manifest_path
+
+
+def verify_train_bundle(
+    *,
+    bundle_file: str | Path,
+) -> dict[str, Any]:
+    """Verify packaged train bundle integrity using embedded manifest checksums."""
+    bundle = Path(bundle_file)
+    if not bundle.exists():
+        return {
+            "ok": False,
+            "bundle_file": str(bundle),
+            "total_files": 0,
+            "verified_files": 0,
+            "missing_files": [],
+            "mismatched_files": [],
+            "errors": [f"file_not_found:{bundle}"],
+        }
+
+    errors: list[str] = []
+    missing: list[str] = []
+    mismatched: list[str] = []
+    verified = 0
+    total = 0
+
+    with tempfile.TemporaryDirectory(prefix="vigil-train-bundle-") as td:
+        tmp = Path(td)
+        try:
+            with tarfile.open(bundle, "r:gz") as tar:
+                member = tar.getmember("bundle-manifest.json")
+                extracted = tar.extractfile(member)
+                if extracted is None:
+                    raise ValueError("manifest_unreadable")
+                manifest = json.loads(extracted.read().decode("utf-8"))
+                try:
+                    tar.extractall(tmp, filter="data")
+                except TypeError:
+                    tar.extractall(tmp)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "bundle_file": str(bundle),
+                "total_files": 0,
+                "verified_files": 0,
+                "missing_files": [],
+                "mismatched_files": [],
+                "errors": [f"bundle_read_error:{exc}"],
+            }
+
+        files = list(manifest.get("files") or [])
+        total = len(files)
+        for item in files:
+            rel = str(item.get("path") or "")
+            expected = str(item.get("sha256") or "")
+            if not rel or not expected:
+                errors.append(f"invalid_manifest_item:{item}")
+                continue
+            path = tmp / rel
+            if not path.exists():
+                missing.append(rel)
+                continue
+            actual = _sha256_file(path)
+            if actual != expected:
+                mismatched.append(rel)
+                continue
+            verified += 1
+
+    ok = (total > 0) and (not errors) and (not missing) and (not mismatched) and (verified == total)
+    return {
+        "ok": ok,
+        "bundle_file": str(bundle),
+        "total_files": total,
+        "verified_files": verified,
+        "missing_files": missing,
+        "mismatched_files": mismatched,
+        "errors": errors,
+    }

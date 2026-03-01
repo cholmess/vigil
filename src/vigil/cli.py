@@ -50,6 +50,7 @@ from vigil.network.corpus import (
     package_train_bundle,
     split_corpus_jsonl,
     validate_corpus_jsonl,
+    verify_train_bundle,
 )
 from vigil.network.digest import summarize_pulled_snapshots
 from vigil.network.intel import (
@@ -2365,6 +2366,43 @@ def train_package(
     typer.echo(f"  Bundle:   {bundle}")
     typer.echo(f"  Manifest: {manifest_path}")
     typer.echo(f"  Files:    {len(manifest['files'])}")
+
+
+@train_app.command("verify-bundle")
+def train_verify_bundle(
+    bundle_file: Path = typer.Option(
+        Path(".vigil-data/train/train-bundle.tar.gz"),
+        "--bundle-file",
+        help="Bundle tar.gz file to verify.",
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for verification payload."),
+) -> None:
+    """Verify training bundle integrity against embedded checksums."""
+    payload = verify_train_bundle(bundle_file=bundle_file)
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Bundle verification written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+    else:
+        _echo_sep("Vigil Train Verify")
+        typer.echo(f"  Bundle: {bundle_file}")
+        typer.echo(f"  Files: {payload['verified_files']}/{payload['total_files']} verified")
+        typer.echo(f"  Status: {'OK' if payload['ok'] else 'FAIL'}")
+        if payload["missing_files"]:
+            typer.echo(f"  Missing: {payload['missing_files']}")
+        if payload["mismatched_files"]:
+            typer.echo(f"  Mismatch: {payload['mismatched_files']}")
+        if payload["errors"]:
+            typer.echo(f"  Errors: {payload['errors']}")
+
+    if not payload["ok"]:
+        raise typer.Exit(code=1)
 
 
 @network_app.command("remote-pull")
