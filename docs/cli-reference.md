@@ -99,10 +99,11 @@ When a prompt is provided, includes current shield score against snapshots from 
 ### `vigil network feed`
 
 ```
-vigil network feed [--days 7] [--top 5] [--format text|json] [--out PATH]
+vigil network feed [--days 7] [--top 5] [--format text|json] [--out PATH] [--prompt-file PATH | --prompt TEXT]
 ```
 
-Builds a predictive multi-class threat feed from local exchange trends, listing the top rising attack classes with occurrence deltas, affected organizations, and frameworks.
+Builds a predictive multi-class threat feed from local exchange trends, listing the top rising attack classes with occurrence deltas, affected organizations, and frameworks.  
+If a prompt is provided, includes per-class shield score from pulled snapshots.
 
 ### `vigil network export-exchange`
 

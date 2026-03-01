@@ -1909,6 +1909,23 @@ def network_feed(
     top: int = typer.Option(5, "--top", help="Maximum number of rising classes to include."),
     format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
     out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for feed payload."),
+    prompt: Optional[str] = typer.Option(
+        None,
+        "--prompt",
+        help="Optional system prompt to compute shield score for each class in the feed.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None,
+        "--prompt-file",
+        help="Path to system prompt file for per-class shield score checks.",
+        show_default=False,
+    ),
+    attacks_dir: Path = typer.Option(
+        Path(".vigil-data/network/pulled"),
+        "--attacks-dir",
+        help="Pulled network snapshot directory used for shield score checks.",
+    ),
     network_dir: Path = typer.Option(
         Path(".vigil-data/network"),
         "--network-dir",
@@ -1934,6 +1951,50 @@ def network_feed(
         typer.echo(typer.style("No rising attack classes found for the selected period.", fg="yellow"))
         return
 
+    if prompt or prompt_file:
+        if prompt and prompt_file:
+            typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        if prompt_file:
+            if not prompt_file.exists():
+                typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+                raise typer.Exit(code=2)
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        runner = VigilBreakPointRunner()
+        bp_files = sorted(Path(attacks_dir).glob("*.bp.json"))
+        for alert in alerts:
+            cls = str(alert.get("attack_class") or "").strip().lower()
+            if not cls:
+                continue
+            class_files: list[Path] = []
+            for bp in bp_files:
+                try:
+                    snap = AttackSnapshot.load_from_file(bp)
+                except Exception:
+                    continue
+                tags = {str(t).lower() for t in snap.metadata.tags}
+                if f"class:{cls}" in tags:
+                    class_files.append(bp)
+            if not class_files:
+                continue
+            summary = runner.run_regression_suite(attacks_dir, prompt_text, snapshot_files=class_files)
+            total = int(summary["total"])
+            allowed = int(summary["allowed"])
+            blocked = int(summary["blocked"])
+            pct = round((allowed / total) * 100, 2) if total else 0.0
+            alert["shield_score"] = {
+                "allowed": allowed,
+                "total": total,
+                "percent": pct,
+                "blocked": blocked,
+            }
+
     if format == ReportFormat.json:
         rendered = json.dumps(payload, indent=2)
         if out:
@@ -1958,6 +2019,9 @@ def network_feed(
         typer.echo(f"      Organizations: {alert.get('organizations_affected', 0)}")
         if alert.get("frameworks"):
             typer.echo(f"      Frameworks: {alert['frameworks']}")
+        if "shield_score" in alert:
+            ss = alert["shield_score"]
+            typer.echo(f"      Shield score: {ss['allowed']}/{ss['total']} ({ss['percent']}%)")
     _echo_sep()
     typer.echo("Run:")
     typer.echo("  vigil network pull --since <date>")

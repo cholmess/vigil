@@ -304,3 +304,72 @@ def test_network_feed_json_out_writes_payload(monkeypatch, tmp_path: Path) -> No
         assert out.exists()
         payload = json.loads(out.read_text(encoding="utf-8"))
         assert payload["records"] == 1
+
+
+def test_network_feed_with_prompt_adds_shield_score(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.build_threat_feed",
+        lambda records, days, top=5: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "window_days": days,
+            "records": 1,
+            "top": top,
+            "alerts": [
+                {
+                    "attack_class": "tool-result-injection",
+                    "current_window_occurrences": 1,
+                    "previous_window_occurrences": 0,
+                    "delta": 1,
+                    "organizations_affected": 1,
+                    "frameworks": {"langchain": 1},
+                }
+            ],
+        },
+    )
+
+    class _FakeRunner:
+        def run_regression_suite(self, attacks_dir, current_system_prompt, snapshot_files=None):
+            return {
+                "total": 1,
+                "allowed": 0,
+                "warned": 0,
+                "blocked": 1,
+                "errors": 0,
+                "results": [],
+            }
+
+    monkeypatch.setattr("vigil.cli.VigilBreakPointRunner", _FakeRunner)
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        attacks_dir = Path(".vigil-data/network/pulled")
+        attacks_dir.mkdir(parents=True, exist_ok=True)
+        snap = AttackSnapshot(
+            vigil_version="0.1.0",
+            metadata=SnapshotMetadata(
+                snapshot_id="feed-a",
+                source="community",
+                severity="high",
+                technique="tool_injection",
+                tags=["class:tool-result-injection"],
+            ),
+            canary=Canary(token_type="api_key"),
+            attack=Attack(conversation=[Message(role="user", content="attack")]),
+        )
+        snap.save_to_file(attacks_dir / "feed-a")
+        prompt = Path("system_prompt.txt")
+        prompt.write_text("You are safe.", encoding="utf-8")
+
+        result = runner.invoke(
+            app,
+            [
+                "network",
+                "feed",
+                "--prompt-file",
+                str(prompt),
+                "--attacks-dir",
+                str(attacks_dir),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Shield score: 0/1 (0.0%)" in result.output

@@ -50,6 +50,7 @@ vigil network alert --days 7 --prompt-file system_prompt.txt
 vigil network alert --format json --out ./.vigil-data/network/intel/alert.json
 vigil network feed --days 7 --top 5
 vigil network feed --format json --out ./.vigil-data/network/intel/feed.json
+vigil network feed --prompt-file system_prompt.txt
 vigil network export-corpus --out ./.vigil-data/network/corpus/corpus.jsonl
 vigil network digest --prompt-file system_prompt.txt
 vigil network export-exchange --out ./.vigil-data/network/export
