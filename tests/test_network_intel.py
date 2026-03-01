@@ -6,7 +6,13 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from vigil.network.intel import build_intel_report, class_trends, load_manifest_records, technique_trends
+from vigil.network.intel import (
+    build_intel_report,
+    build_threat_alert,
+    class_trends,
+    load_manifest_records,
+    technique_trends,
+)
 
 
 def _write_manifest(path: Path, rows: list[dict]) -> None:
@@ -67,3 +73,68 @@ def test_build_intel_report_includes_top_fields() -> None:
     assert report["records"] == 2
     assert report["top_technique"] == "jailbreak"
     assert report["top_class"] == "tool-result-injection"
+
+
+def test_build_threat_alert_selects_top_class() -> None:
+    records = [
+        {
+            "attack_class": "tool-result-injection",
+            "technique": "tool_injection",
+            "frameworks": ["langchain"],
+            "submitted_at": "2026-03-14T00:00:00Z",
+        },
+        {
+            "attack_class": "tool-result-injection",
+            "technique": "tool_injection",
+            "frameworks": ["langgraph"],
+            "submitted_at": "2026-03-13T00:00:00Z",
+        },
+        {
+            "attack_class": "other",
+            "technique": "jailbreak",
+            "frameworks": ["generic"],
+            "submitted_at": "2026-03-03T00:00:00Z",
+        },
+    ]
+    alert = build_threat_alert(records, days=7, now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+    assert alert["found"] is True
+    assert alert["attack_class"] == "tool-result-injection"
+    assert alert["current_window_occurrences"] == 2
+    assert alert["previous_window_occurrences"] == 0
+    assert alert["delta"] == 2
+    assert alert["frameworks"] == {"langchain": 1, "langgraph": 1}
+
+
+def test_build_threat_alert_respects_requested_class() -> None:
+    records = [
+        {
+            "attack_class": "tool-result-injection",
+            "frameworks": ["langchain"],
+            "submitted_at": "2026-03-14T00:00:00Z",
+        },
+        {
+            "attack_class": "indirect-prompt-injection",
+            "frameworks": ["llamaindex"],
+            "submitted_at": "2026-03-14T00:00:00Z",
+        },
+    ]
+    alert = build_threat_alert(
+        records,
+        days=7,
+        attack_class="indirect-prompt-injection",
+        now=datetime(2026, 3, 15, tzinfo=timezone.utc),
+    )
+    assert alert["found"] is True
+    assert alert["attack_class"] == "indirect-prompt-injection"
+    assert alert["frameworks"] == {"llamaindex": 1}
+
+
+def test_build_threat_alert_returns_not_found_when_no_match() -> None:
+    alert = build_threat_alert(
+        [{"attack_class": "tool-result-injection", "submitted_at": "2026-03-14T00:00:00Z"}],
+        days=7,
+        attack_class="missing-class",
+        now=datetime(2026, 3, 15, tzinfo=timezone.utc),
+    )
+    assert alert["found"] is False
+    assert alert["attack_class"] is None

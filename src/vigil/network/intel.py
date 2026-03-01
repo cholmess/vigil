@@ -149,3 +149,53 @@ def build_intel_report(
         "technique_trends": t_trends,
         "class_trends": c_trends,
     }
+
+
+def build_threat_alert(
+    records: list[dict[str, Any]],
+    *,
+    days: int = 7,
+    attack_class: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build threat alert payload for a rising attack class."""
+    ref = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
+    c_trends = class_trends(records, days=days, now=ref)
+    if attack_class:
+        chosen = next((r for r in c_trends if r["attack_class"] == attack_class.lower()), None)
+    else:
+        chosen = next((r for r in c_trends if r["current"] > 0), None)
+    if not chosen:
+        return {
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "window_days": days,
+            "attack_class": None,
+            "found": False,
+        }
+
+    cls = chosen["attack_class"]
+    class_records = [r for r in records if str(r.get("attack_class") or "").lower() == cls]
+    first_seen_dt = None
+    frameworks = Counter()
+    for row in class_records:
+        submitted = _parse_iso8601(str(row.get("submitted_at", "")))
+        if submitted is not None and (first_seen_dt is None or submitted < first_seen_dt):
+            first_seen_dt = submitted
+        for fw in row.get("frameworks") or []:
+            frameworks[str(fw).lower()] += 1
+
+    first_seen_days_ago = None
+    if first_seen_dt is not None:
+        first_seen_days_ago = max(0, int((ref - first_seen_dt).total_seconds() // 86400))
+
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "window_days": days,
+        "attack_class": cls,
+        "found": True,
+        "first_seen_days_ago": first_seen_days_ago,
+        "current_window_occurrences": int(chosen["current"]),
+        "previous_window_occurrences": int(chosen["previous"]),
+        "delta": int(chosen["delta"]),
+        "frameworks": dict(sorted(frameworks.items())),
+    }

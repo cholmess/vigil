@@ -46,6 +46,8 @@ vigil network push ./.vigil-data/network/sanitized/inc-abc123.bp.json --framewor
 vigil network pull --since 2026-01-01 --framework langchain --class tool-result-injection
 vigil network intel --days 7 --prompt-file system_prompt.txt
 vigil network intel --format json --out ./.vigil-data/network/intel/latest.json
+vigil network alert --days 7 --prompt-file system_prompt.txt
+vigil network alert --format json --out ./.vigil-data/network/intel/alert.json
 vigil network export-corpus --out ./.vigil-data/network/corpus/corpus.jsonl
 vigil network digest --prompt-file system_prompt.txt
 vigil network export-exchange --out ./.vigil-data/network/export

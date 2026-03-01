@@ -45,7 +45,7 @@ from vigil.network.exchange import (
 )
 from vigil.network.corpus import export_corpus_jsonl
 from vigil.network.digest import summarize_pulled_snapshots
-from vigil.network.intel import class_trends, load_manifest_records, technique_trends
+from vigil.network.intel import build_threat_alert, class_trends, load_manifest_records, technique_trends
 from vigil.network.sync import export_exchange_bundle, import_exchange_bundle, merge_exchange_dirs
 from vigil.network.sanitizer import sanitize_snapshot_file
 
@@ -1774,6 +1774,126 @@ def network_digest(
         typer.echo(f"{total} new network attacks pulled — {affected} affect your current prompt.")
         if affected > 0:
             typer.echo("Run `vigil heal --intelligent --network --prompt-file <file>` to prioritize fixes.")
+
+
+@network_app.command("alert")
+def network_alert(
+    days: int = typer.Option(7, "--days", help="Comparison window in days."),
+    attack_class: Optional[str] = typer.Option(
+        None,
+        "--class",
+        help="Specific attack class to report on (default: top trending class).",
+        show_default=False,
+    ),
+    format: ReportFormat = typer.Option(ReportFormat.text, "--format", help="Output format: text or json."),
+    out: Optional[Path] = typer.Option(None, "--out", help="Optional output file path for alert payload."),
+    prompt: Optional[str] = typer.Option(
+        None,
+        "--prompt",
+        help="Optional system prompt to compute shield score against alert class.",
+        show_default=False,
+    ),
+    prompt_file: Optional[Path] = typer.Option(
+        None,
+        "--prompt-file",
+        help="Path to system prompt file for shield score check.",
+        show_default=False,
+    ),
+    attacks_dir: Path = typer.Option(
+        Path(".vigil-data/network/pulled"),
+        "--attacks-dir",
+        help="Pulled network snapshot directory used for shield score check.",
+    ),
+    network_dir: Path = typer.Option(
+        Path(".vigil-data/network"),
+        "--network-dir",
+        help="Local exchange storage directory.",
+    ),
+) -> None:
+    """Generate actionable threat alert for the top trending attack class."""
+    records = load_manifest_records(network_dir=network_dir)
+    if not records:
+        typer.echo(typer.style("No exchange records available yet.", fg="yellow"))
+        return
+
+    alert = build_threat_alert(records, days=days, attack_class=attack_class)
+    if not alert.get("found"):
+        typer.echo(typer.style("No matching trending attack class found.", fg="yellow"))
+        return
+
+    payload = dict(alert)
+    if prompt or prompt_file:
+        if prompt and prompt_file:
+            typer.echo(typer.style("Error: provide --prompt or --prompt-file, not both.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+        if prompt_file:
+            if not prompt_file.exists():
+                typer.echo(typer.style(f"Error: file not found: {prompt_file}", fg="red"), err=True)
+                raise typer.Exit(code=2)
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            prompt_text = (prompt or "").strip()
+        if not prompt_text:
+            typer.echo(typer.style("Error: system prompt is empty.", fg="red"), err=True)
+            raise typer.Exit(code=2)
+
+        cls = str(alert["attack_class"])
+        class_files: list[Path] = []
+        for bp in sorted(Path(attacks_dir).glob("*.bp.json")):
+            try:
+                snap = AttackSnapshot.load_from_file(bp)
+            except Exception:
+                continue
+            tags = {str(t).lower() for t in snap.metadata.tags}
+            if f"class:{cls}" in tags:
+                class_files.append(bp)
+
+        if class_files:
+            runner = VigilBreakPointRunner()
+            summary = runner.run_regression_suite(attacks_dir, prompt_text, snapshot_files=class_files)
+            total = int(summary["total"])
+            allowed = int(summary["allowed"])
+            blocked = int(summary["blocked"])
+            pct = round((allowed / total) * 100, 2) if total else 0.0
+            payload["shield_score"] = {
+                "allowed": allowed,
+                "total": total,
+                "percent": pct,
+                "blocked": blocked,
+            }
+
+    if format == ReportFormat.json:
+        rendered = json.dumps(payload, indent=2)
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(rendered, encoding="utf-8")
+            typer.echo(typer.style(f"Threat alert written to {out}", fg="green"))
+        else:
+            typer.echo(rendered)
+        return
+
+    _echo_sep("Vigil Threat Alert")
+    typer.echo(f"  Attack class: {payload['attack_class']}")
+    if payload.get("first_seen_days_ago") is not None:
+        typer.echo(f"  First seen: {payload['first_seen_days_ago']} day(s) ago")
+    typer.echo(
+        "  Occurrences: "
+        f"{payload['current_window_occurrences']} (current {days}d) "
+        f"vs {payload['previous_window_occurrences']} (previous {days}d)"
+    )
+    if payload.get("frameworks"):
+        typer.echo(f"  Frameworks: {payload['frameworks']}")
+    if "shield_score" in payload:
+        ss = payload["shield_score"]
+        typer.echo(
+            f"  Your shield score against this class: "
+            f"{ss['allowed']}/{ss['total']} ({ss['percent']}%)"
+        )
+    _echo_sep()
+    typer.echo("Run:")
+    typer.echo(f"  vigil network pull --class {payload['attack_class']}")
+    typer.echo("  vigil test --network --prompt-file <file>")
+    typer.echo("  vigil heal --intelligent --network --prompt-file <file>")
 
 
 @network_app.command("export-exchange")

@@ -78,6 +78,15 @@ vigil network digest [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT]
 
 Shows a summary of pulled snapshots and, when a prompt is provided, how many currently succeed (`BLOCK`) against that prompt.
 
+### `vigil network alert`
+
+```
+vigil network alert [--days 7] [--class NAME] [--format text|json] [--out PATH] [--prompt-file PATH | --prompt TEXT]
+```
+
+Generates an actionable alert for a rising attack class using exchange manifest trends.  
+When a prompt is provided, includes current shield score against snapshots from that class.
+
 ### `vigil network export-exchange`
 
 ```
