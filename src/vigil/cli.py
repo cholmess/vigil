@@ -1165,6 +1165,10 @@ def heal(
         for name, info in ordered:
             pct = round(float(info["probability"]) * 100, 1)
             typer.echo(f"    {name}: {info['level']} ({pct}%)")
+        if profile.get("top_class"):
+            typer.echo(f"  Top class risk: {profile['top_class']}")
+        if profile.get("top_framework"):
+            typer.echo(f"  Top framework risk: {profile['top_framework']}")
         typer.echo("")
         typer.echo(f"  Estimated shield score after changes: {round(before*100,1)}% -> {round(after*100,1)}%")
         _echo_sep()

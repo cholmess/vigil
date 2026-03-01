@@ -452,3 +452,56 @@ def test_vigil_score_json_out_writes_payload(monkeypatch, tmp_path: Path) -> Non
         assert out.exists()
         payload = json.loads(out.read_text(encoding="utf-8"))
         assert payload["total_snapshots"] == 1
+
+
+def test_heal_intelligent_prints_top_class_and_framework(monkeypatch, tmp_path: Path) -> None:
+    class _FakeRunner:
+        def run_regression_suite(self, attacks_dir, current_system_prompt):
+            return {
+                "total": 2,
+                "allowed": 1,
+                "warned": 0,
+                "blocked": 1,
+                "errors": 0,
+                "results": [{"file": "a.bp.json", "status": "BLOCK"}],
+            }
+
+    class _FakeScorer:
+        def __init__(self, attacks_dir):
+            self.attacks_dir = attacks_dir
+
+        def assess(self, prompt):
+            return {
+                "total_snapshots": 2,
+                "techniques": {"tool_injection": {"probability": 0.8, "level": "HIGH"}},
+                "classes": {"tool-result-injection": {"probability": 0.7, "level": "HIGH"}},
+                "frameworks": {"langchain": {"probability": 0.6, "level": "MEDIUM"}},
+                "top_technique": "tool_injection",
+                "top_class": "tool-result-injection",
+                "top_framework": "langchain",
+            }
+
+    monkeypatch.setattr("vigil.cli.VigilBreakPointRunner", _FakeRunner)
+    monkeypatch.setattr(
+        "vigil.cli.hardening_suggestions_for_files",
+        lambda attacks_dir, blocked_files: [
+            {
+                "file": "a.bp.json",
+                "snapshot_id": "a",
+                "severity": "high",
+                "technique": "tool_injection",
+                "attack_class": "tool-result-injection",
+                "framework": "langchain",
+                "suggestion": "Sanitize tool outputs.",
+            }
+        ],
+    )
+    monkeypatch.setattr("vigil.cli.VulnerabilityScorer", _FakeScorer)
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        prompt = Path("system_prompt.txt")
+        prompt.write_text("safe", encoding="utf-8")
+        result = runner.invoke(app, ["heal", "--intelligent", "--prompt-file", str(prompt)])
+        assert result.exit_code == 1
+        assert "Top class risk: tool-result-injection" in result.output
+        assert "Top framework risk: langchain" in result.output

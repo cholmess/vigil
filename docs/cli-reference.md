@@ -299,6 +299,8 @@ Suggests system-prompt hardening changes for attacks that still return `BLOCK`.
 vigil heal [--attacks-dir DIR] [--prompt-file PATH | --prompt TEXT] [--network] [--intelligent]
 ```
 
+With `--intelligent`, suggestions are prioritized using the scorer profile (technique + class + framework risk) and include an estimated shield-score improvement.
+
 ---
 
 ## `vigil swarm-test`

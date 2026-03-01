@@ -43,6 +43,22 @@ def hardening_suggestions_for_files(
                 "snapshot_id": snapshot.metadata.snapshot_id,
                 "severity": (snapshot.metadata.severity or "unknown").lower(),
                 "technique": snapshot.metadata.technique.value,
+                "attack_class": next(
+                    (
+                        str(tag).split("class:", 1)[1].strip().lower()
+                        for tag in snapshot.metadata.tags
+                        if str(tag).lower().startswith("class:")
+                    ),
+                    "unknown",
+                ),
+                "framework": next(
+                    (
+                        str(tag).split("framework:", 1)[1].strip().lower()
+                        for tag in snapshot.metadata.tags
+                        if str(tag).lower().startswith("framework:")
+                    ),
+                    "unknown",
+                ),
                 "suggestion": suggestion,
             }
         )

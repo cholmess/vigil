@@ -31,6 +31,8 @@ def test_hardening_suggestions_for_files_returns_blocked_suggestions(tmp_path: P
     result = hardening_suggestions_for_files(tmp_path, ["a.bp.json", "b.bp.json"])
     assert len(result) == 2
     assert result[0]["technique"] == "direct_injection"
+    assert result[0]["attack_class"] == "unknown"
+    assert result[0]["framework"] == "unknown"
 
 
 def test_hardening_suggestions_for_files_deduplicates(tmp_path: Path) -> None:
