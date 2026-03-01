@@ -137,3 +137,56 @@ def test_train_prepare_writes_bundle(tmp_path: Path) -> None:
         assert result.exit_code == 0
         assert Path(".vigil-data/train/corpus.jsonl").exists()
         assert Path(".vigil-data/train/prepare-report.json").exists()
+
+
+def test_network_alert_text_renders_orgs(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.build_threat_alert",
+        lambda records, days, attack_class=None: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "window_days": days,
+            "attack_class": "tool-result-injection",
+            "found": True,
+            "first_seen_days_ago": 6,
+            "current_window_occurrences": 23,
+            "previous_window_occurrences": 0,
+            "delta": 23,
+            "organizations_affected": 8,
+            "frameworks": {"langchain": 17, "generic": 6},
+        },
+    )
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        result = runner.invoke(app, ["network", "alert"])
+        assert result.exit_code == 0
+        assert "Attack class: tool-result-injection" in result.output
+        assert "Organizations affected: 8" in result.output
+
+
+def test_network_alert_json_out_writes_payload(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("vigil.cli.load_manifest_records", lambda network_dir: [{"network_id": "VN-1"}])
+    monkeypatch.setattr(
+        "vigil.cli.build_threat_alert",
+        lambda records, days, attack_class=None: {
+            "generated_at": "2026-03-20T00:00:00Z",
+            "window_days": days,
+            "attack_class": "tool-result-injection",
+            "found": True,
+            "first_seen_days_ago": 6,
+            "current_window_occurrences": 23,
+            "previous_window_occurrences": 0,
+            "delta": 23,
+            "organizations_affected": 8,
+            "frameworks": {"langchain": 17},
+        },
+    )
+
+    with runner.isolated_filesystem(temp_dir=str(tmp_path)):
+        out = Path("alert.json")
+        result = runner.invoke(app, ["network", "alert", "--format", "json", "--out", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["attack_class"] == "tool-result-injection"
+        assert payload["organizations_affected"] == 8

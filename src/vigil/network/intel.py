@@ -177,12 +177,17 @@ def build_threat_alert(
     class_records = [r for r in records if str(r.get("attack_class") or "").lower() == cls]
     first_seen_dt = None
     frameworks = Counter()
+    org_refs: set[str] = set()
     for row in class_records:
         submitted = _parse_iso8601(str(row.get("submitted_at", "")))
         if submitted is not None and (first_seen_dt is None or submitted < first_seen_dt):
             first_seen_dt = submitted
         for fw in row.get("frameworks") or []:
             frameworks[str(fw).lower()] += 1
+        for key in ("org_ref", "organization_ref", "organization", "tenant", "org", "submitted_by"):
+            raw = str(row.get(key) or "").strip().lower()
+            if raw:
+                org_refs.add(raw)
 
     first_seen_days_ago = None
     if first_seen_dt is not None:
@@ -198,4 +203,5 @@ def build_threat_alert(
         "previous_window_occurrences": int(chosen["previous"]),
         "delta": int(chosen["delta"]),
         "frameworks": dict(sorted(frameworks.items())),
+        "organizations_affected": len(org_refs),
     }

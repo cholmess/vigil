@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata
+import json
+
+from vigil.models import Attack, AttackSnapshot, Canary, Message, SnapshotMetadata, SnapshotOrigin
 from vigil.network.exchange import (
     pull_exchange_snapshots,
     read_network_state,
@@ -69,6 +71,29 @@ def test_store_exchange_snapshot_assigns_network_id(tmp_path: Path) -> None:
     assert stored.exists()
     manifest = tmp_path / "network" / "exchange" / "manifest.jsonl"
     assert manifest.exists()
+
+
+def test_store_exchange_snapshot_writes_org_ref_hash(tmp_path: Path) -> None:
+    snap = AttackSnapshot(
+        vigil_version="0.1.0",
+        metadata=SnapshotMetadata(
+            snapshot_id="tenant-a",
+            source="community",
+            severity="high",
+            technique="tool_injection",
+            tags=["class:tool-result-injection"],
+        ),
+        origin=SnapshotOrigin(tenant="acme-prod"),
+        canary=Canary(token_type="api_key"),
+        attack=Attack(conversation=[Message(role="user", content="x")]),
+    )
+    snap_path = snap.save_to_file(tmp_path / "tenant-a")
+    store_exchange_snapshot(snap_path, network_dir=tmp_path / "network")
+
+    manifest = tmp_path / "network" / "exchange" / "manifest.jsonl"
+    row = json.loads(manifest.read_text(encoding="utf-8").splitlines()[0])
+    assert str(row.get("org_ref", "")).startswith("org-")
+    assert row["org_ref"] != "acme-prod"
 
 
 def test_store_exchange_snapshot_increments_sequence(tmp_path: Path) -> None:

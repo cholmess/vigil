@@ -85,6 +85,7 @@ vigil network alert [--days 7] [--class NAME] [--format text|json] [--out PATH] 
 ```
 
 Generates an actionable alert for a rising attack class using exchange manifest trends.  
+Includes occurrences, affected-organization count (from anonymized `org_ref`), and framework distribution.  
 When a prompt is provided, includes current shield score against snapshots from that class.
 
 ### `vigil network export-exchange`

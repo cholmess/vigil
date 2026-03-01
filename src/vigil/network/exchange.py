@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import json
 import shutil
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from vigil.models import AttackSnapshot
+
+
+def _org_ref_from_snapshot(snapshot: AttackSnapshot) -> str | None:
+    """Return a non-reversible organization reference for shared intel stats."""
+    tenant = None
+    if snapshot.origin is not None:
+        tenant = snapshot.origin.tenant
+    raw = str(tenant or "").strip().lower()
+    if not raw:
+        return None
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"org-{digest}"
 
 
 def _next_network_id(manifest: Path) -> str:
@@ -57,6 +70,7 @@ def store_exchange_snapshot(snapshot_file: str | Path, *, network_dir: str | Pat
             ),
             None,
         ),
+        "org_ref": _org_ref_from_snapshot(snapshot),
     }
     with manifest.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")

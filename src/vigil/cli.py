@@ -1881,6 +1881,7 @@ def network_alert(
         f"{payload['current_window_occurrences']} (current {days}d) "
         f"vs {payload['previous_window_occurrences']} (previous {days}d)"
     )
+    typer.echo(f"  Organizations affected: {payload.get('organizations_affected', 0)}")
     if payload.get("frameworks"):
         typer.echo(f"  Frameworks: {payload['frameworks']}")
     if "shield_score" in payload:

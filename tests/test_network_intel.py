@@ -81,12 +81,14 @@ def test_build_threat_alert_selects_top_class() -> None:
             "attack_class": "tool-result-injection",
             "technique": "tool_injection",
             "frameworks": ["langchain"],
+            "org_ref": "org-a",
             "submitted_at": "2026-03-14T00:00:00Z",
         },
         {
             "attack_class": "tool-result-injection",
             "technique": "tool_injection",
             "frameworks": ["langgraph"],
+            "org_ref": "org-b",
             "submitted_at": "2026-03-13T00:00:00Z",
         },
         {
@@ -103,6 +105,7 @@ def test_build_threat_alert_selects_top_class() -> None:
     assert alert["previous_window_occurrences"] == 0
     assert alert["delta"] == 2
     assert alert["frameworks"] == {"langchain": 1, "langgraph": 1}
+    assert alert["organizations_affected"] == 2
 
 
 def test_build_threat_alert_respects_requested_class() -> None:
@@ -110,11 +113,13 @@ def test_build_threat_alert_respects_requested_class() -> None:
         {
             "attack_class": "tool-result-injection",
             "frameworks": ["langchain"],
+            "org_ref": "org-a",
             "submitted_at": "2026-03-14T00:00:00Z",
         },
         {
             "attack_class": "indirect-prompt-injection",
             "frameworks": ["llamaindex"],
+            "org_ref": "org-b",
             "submitted_at": "2026-03-14T00:00:00Z",
         },
     ]
@@ -127,6 +132,7 @@ def test_build_threat_alert_respects_requested_class() -> None:
     assert alert["found"] is True
     assert alert["attack_class"] == "indirect-prompt-injection"
     assert alert["frameworks"] == {"llamaindex": 1}
+    assert alert["organizations_affected"] == 1
 
 
 def test_build_threat_alert_returns_not_found_when_no_match() -> None:
