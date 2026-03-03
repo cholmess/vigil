@@ -1,16 +1,45 @@
-# vigil
+# Vigil
 
-[![CI](https://github.com/cholmess/vigil/actions/workflows/ci.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/ci.yml)
-[![LLM Safety Gate](https://github.com/cholmess/vigil/actions/workflows/vigil.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/vigil.yml)
-[![Demo E2E Smoke](https://github.com/cholmess/vigil/actions/workflows/demo-e2e.yml/badge.svg)](https://github.com/cholmess/vigil/actions/workflows/demo-e2e.yml)
+![CI](https://github.com/cholmess/vigil/actions/workflows/vigil.yml/badge.svg)
+[![PyPI](https://img.shields.io/pypi/v/vigil-llm)](https://pypi.org/project/vigil-llm/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Community Attacks](https://img.shields.io/badge/community%20attacks-50%20snapshots-green)](https://github.com/cholmess/vigil-community-attacks)
 
-Close the loop between detecting an LLM attack and making sure it never works again.
+**LLM security regression testing and forensic audit — open source.**
 
-Most teams find out about a prompt injection weeks after it happened — if ever. The attacker asked the model to dump its context. The model complied. The response looked like a normal API call. No firewall flagged it. By the time anyone noticed, the system prompt, internal configuration, and synthetic credentials had already been exfiltrated.
+Close the loop between detecting a prompt injection attack and making sure it never works again.
 
-Even teams that do detect attacks in real time rarely close the loop. They patch the system prompt, ship the fix, and move on. There is no record of what the attack looked like, no automated test that verifies the patch held, and no gate that catches the same vulnerability resurfacing in the next refactor.
+---
 
-Vigil fixes this. It bundles three capabilities into a single feedback loop:
+## The problem
+
+Most teams find out about a prompt injection weeks after it happened — if ever. The attacker asked the model to dump its context. The model complied. The response looked like a normal API call. No firewall flagged it.
+
+Even teams that do detect attacks rarely close the loop. They patch the system prompt, ship the fix, and move on. There is no record of what the attack looked like, no automated test that verifies the patch held, and no gate that catches the same vulnerability resurfacing in the next refactor.
+
+**Vigil fixes this.**
+
+---
+
+## Quick start
+
+```bash
+pip install vigil-llm
+
+# Pull 50 real-world attack patterns from the community library
+vigil network pull --community
+
+# Run them against your system prompt
+vigil test --prompt-file system_prompt.txt --report
+```
+
+If any snapshot triggers, you have a vulnerability. Fix the prompt, rerun, commit the snapshot as a permanent CI gate.
+
+---
+
+## How it works
+
+Vigil bundles three capabilities into a single feedback loop:
 
 | Module | What it does | When |
 |---|---|---|
@@ -18,109 +47,46 @@ Vigil fixes this. It bundles three capabilities into a single feedback loop:
 | `vigil.forensics` | Scans historical LLM logs for credential leaks and PII exfiltration | Historical |
 | `vigil.breakpoint` | Replays captured attacks against the current system prompt and blocks regressions | Every deploy |
 
-Every attack `vigil.canari` catches becomes a `.bp.json` snapshot. Every finding `vigil.forensics` surfaces becomes a `.bp.json` snapshot. Every snapshot becomes a `vigil.breakpoint` regression test. Every deploy is gated against the full history of known attacks. The system gets harder to attack every time it is attacked.
+Every attack `vigil.canari` catches becomes a `.bp.json` snapshot. Every finding `vigil.forensics` surfaces becomes a `.bp.json` snapshot. Every snapshot becomes a `vigil.breakpoint` regression test. Every deploy is gated against the full history of known attacks.
 
-## Install
+**The system gets harder to attack every time it is attacked.**
 
-```bash
-pip install vigil
+---
+
+## The feedback loop
+
+```
+Attack detected (Canari)
+        ↓
+Snapshot created (.bp.json)
+        ↓
+Snapshot committed to repo
+        ↓
+BreakPoint runs on every PR
+        ↓
+Vulnerability can never silently return
 ```
 
-Or from source:
+---
+
+## Community attack library
+
+50 real-world attack snapshots sourced from published security research — ready to pull in one command.
 
 ```bash
-pip install -e .
-```
-
-## Quick start
-
-```bash
-# 1) Scan historical logs for past breaches
-vigil forensics scan \
-  --logs ./logs/ \
-  --format otel \
-  --attacks-dir ./tests/attacks/
-
-# (Week 2) Pull seed community attacks in one command
 vigil network pull --community
-
-# (Phase 2) Sanitize and submit snapshots to the local exchange
-vigil network sanitize --in ./tests/attacks --out ./.vigil-data/network/sanitized --term Acme
-vigil network push ./.vigil-data/network/sanitized/inc-abc123.bp.json --framework langchain --attack-class tool-result-injection
-vigil network pull --since 2026-01-01 --framework langchain --class tool-result-injection
-vigil network intel --days 7 --prompt-file system_prompt.txt
-vigil network intel --format json --out ./.vigil-data/network/intel/latest.json
-vigil network alert --days 7 --prompt-file system_prompt.txt
-vigil network alert --format json --out ./.vigil-data/network/intel/alert.json
-vigil network feed --days 7 --top 5
-vigil network feed --format json --out ./.vigil-data/network/intel/feed.json
-vigil network feed --prompt-file system_prompt.txt
-vigil network export-corpus --out ./.vigil-data/network/corpus/corpus.jsonl
-vigil network digest --prompt-file system_prompt.txt
-vigil network export-exchange --out ./.vigil-data/network/export
-vigil network import-exchange --in ./.vigil-data/network/export
-vigil network remote-push --repo git@github.com:your-org/vigil-exchange.git
-vigil network remote-pull --repo git@github.com:your-org/vigil-exchange.git
-vigil train prepare --out-dir ./.vigil-data/train
-vigil train prepare --out-dir ./.vigil-data/train --prompt-file system_prompt.txt
-vigil train prepare --out-dir ./.vigil-data/train --val-ratio 0.2 --seed 42
-vigil train stats --format json --out ./.vigil-data/train/stats.json
-vigil train validate --corpus-file ./.vigil-data/train/corpus.jsonl
-vigil train package --train-dir ./.vigil-data/train --out ./.vigil-data/train/train-bundle.tar.gz
-vigil train verify-bundle --bundle-file ./.vigil-data/train/train-bundle.tar.gz
-vigil train balance --corpus-file ./.vigil-data/train/corpus.jsonl
-vigil train doctor --corpus-file ./.vigil-data/train/corpus.jsonl --max-imbalance 5
-vigil train check-split --train-file ./.vigil-data/train/train.jsonl --val-file ./.vigil-data/train/val.jsonl
-vigil train curriculum --corpus-file ./.vigil-data/train/corpus.jsonl --network-dir ./.vigil-data/network --days 30 --top 5
-vigil train bootstrap --out-dir ./.vigil-data/train --network-dir ./.vigil-data/network --val-ratio 0.2 --strict
-vigil train runs --train-dir ./.vigil-data/train --limit 10
-
-# 2) Test current system prompt against every known attack
-vigil test --prompt-file system_prompt.txt
-# → BLOCK: still vulnerable
-vigil test --network --prompt-file system_prompt.txt
-
-# Suggest hardening changes for blocked attacks
-vigil heal --prompt-file system_prompt.txt
-vigil heal --intelligent --prompt-file system_prompt.txt
-
-# Multi-agent (swarm) attribution test
-vigil swarm-test \
-  --workflow ./workflows/research_agent.py \
-  --framework langgraph \
-  --prompt-file system_prompt.txt \
-  --attacks-dir ./tests/attacks
-
-# Empirical vulnerability scoring (technique/class/framework)
-vigil score --prompt-file system_prompt.txt
-vigil score --prompt-file system_prompt.txt --format json --out ./.vigil-data/train/score.json
-
-# Week 3: diff-aware mode (fast CI loop)
-vigil test --prompt-file system_prompt.txt --diff-aware
-# → runs only snapshots relevant to prompt diff
-
-# 3) Harden — read the hardening_suggestion in the snapshot, edit system_prompt.txt
-
-# 4) Verify
-vigil test --prompt-file system_prompt.txt
-# → ALLOW: hardened
-
-# Optional: machine-readable CI artifact
-vigil test --prompt-file system_prompt.txt --report
-# → writes ./vigil-report.json
-
-# 5) Commit the snapshot as a permanent regression test
-git add system_prompt.txt tests/attacks/
-git commit -m "harden prompt against context dump (inc-conv-abc123)"
-git push
-# → CI runs full suite → green
 ```
 
-## GitHub Action (local)
+Covers: direct injection, indirect RAG injection, prompt leakage, multi-turn manipulation, agent hijacking, tool injection, jailbreaks.
 
-Use the local action in this repository:
+→ [vigil-community-attacks](https://github.com/cholmess/vigil-community-attacks)
+
+---
+
+## GitHub Actions — CI gate in 5 lines
 
 ```yaml
+# .github/workflows/vigil.yml
 name: LLM Safety Gate
 on: [pull_request]
 
@@ -139,26 +105,69 @@ jobs:
           diff-aware: "true"
 ```
 
-A ready-to-use workflow is also included at `.github/workflows/vigil.yml`.
+---
 
-## Forensic audit workflow
+## Full CLI reference
 
 ```bash
-# Initialize a named audit workspace
+# Forensics — scan historical logs for past attacks
+vigil forensics scan \
+  --logs ./logs/ \
+  --format otel \
+  --attacks-dir ./tests/attacks/
+
+# Forensic audit workflow (full evidence pack)
 vigil forensics audit init --name "Q1 2026 Audit" --client "Acme Corp" --application "AI Gateway"
+vigil forensics audit ingest --audit-id <id> --source ./logs/prod/ --label "Production"
+vigil forensics audit scan --audit-id <id>
+vigil forensics audit report --audit-id <id> --format json
 
-# Ingest one or more log sources
-vigil forensics audit ingest --audit-id <audit-id> --source ./logs/prod/ --label "Production"
-vigil forensics audit ingest --audit-id <audit-id> --source ./logs/staging/ --label "Staging"
+# Test current system prompt against all known attacks
+vigil test --prompt-file system_prompt.txt
+vigil test --prompt-file system_prompt.txt --report
+vigil test --prompt-file system_prompt.txt --diff-aware     # CI fast path
+vigil test --network --prompt-file system_prompt.txt
 
-# Scan all ingested sources
-vigil forensics audit scan --audit-id <audit-id>
+# Hardening suggestions
+vigil heal --prompt-file system_prompt.txt
+vigil heal --intelligent --prompt-file system_prompt.txt
 
-# Generate compliance report and evidence pack
-vigil forensics audit report --audit-id <audit-id> --format json
+# Vulnerability scoring
+vigil score --prompt-file system_prompt.txt
+vigil score --prompt-file system_prompt.txt --format json --out ./score.json
+
+# Multi-agent (swarm) testing
+vigil swarm-test \
+  --workflow ./workflows/research_agent.py \
+  --framework langgraph \
+  --prompt-file system_prompt.txt \
+  --attacks-dir ./tests/attacks
+
+# Network — community attack exchange
+vigil network pull --community
+vigil network pull --since 2026-01-01 --framework langchain --class tool-result-injection
+vigil network push <snapshot.bp.json> --framework langchain --attack-class tool-result-injection
+vigil network intel --days 7 --prompt-file system_prompt.txt
+vigil network alert --days 7 --prompt-file system_prompt.txt
+vigil network feed --days 7 --top 5
+vigil network digest --prompt-file system_prompt.txt
+
+# Training pipeline
+vigil train prepare --out-dir ./.vigil-data/train --val-ratio 0.2 --seed 42
+vigil train stats
+vigil train validate --corpus-file ./.vigil-data/train/corpus.jsonl
+vigil train balance --corpus-file ./.vigil-data/train/corpus.jsonl
+vigil train doctor --corpus-file ./.vigil-data/train/corpus.jsonl
+vigil train curriculum --corpus-file ./.vigil-data/train/corpus.jsonl --days 30
+vigil train bootstrap --out-dir ./.vigil-data/train --strict
+vigil train package --train-dir ./.vigil-data/train --out ./train-bundle.tar.gz
+vigil train verify-bundle --bundle-file ./train-bundle.tar.gz
+vigil train runs --limit 10
 ```
 
-## Export a live Canari incident
+---
+
+## Export a live Canari incident as a snapshot
 
 ```bash
 canari --db canari.db export-attack \
@@ -168,27 +177,36 @@ canari --db canari.db export-attack \
 vigil test --attacks-dir ./tests/attacks/ --prompt-file system_prompt.txt
 ```
 
+---
+
 ## Python API
 
 ```python
+# Real-time detection
 from vigil.loop.exporter import VigilCanariWrapper
 from vigil.loop.scanner import CanariScanner
 
 scanner = CanariScanner()
 wrapper = VigilCanariWrapper(scanner=scanner)
-snap_path = wrapper.process_turn(system_prompt=SYSTEM_PROMPT, user_input=user_message, llm_output=assistant_response)
-if snap_path: print(f"Attack snapshot: {snap_path}")
-```
+snap_path = wrapper.process_turn(
+    system_prompt=SYSTEM_PROMPT,
+    user_input=user_message,
+    llm_output=assistant_response
+)
+if snap_path:
+    print(f"Attack snapshot: {snap_path}")
 
-```python
+# Historical forensics
 from vigil import VigilForensicsWrapper
 
-scanner = VigilForensicsWrapper(attacks_dir="./tests/attacks/", log_format="otel")
+scanner = VigilForensicsWrapper(
+    attacks_dir="./tests/attacks/",
+    log_format="otel"
+)
 result = scanner.run_audit(log_path="./logs/")
 print(f"Findings: {result.finding_count}")
-```
 
-```python
+# Regression testing
 from vigil import VigilBreakPointRunner
 
 runner = VigilBreakPointRunner(
@@ -200,32 +218,38 @@ if any(r.status == "BLOCK" for r in results):
     raise SystemExit(2)
 ```
 
-## Docs
+---
+
+## Documentation
 
 - [Architecture](docs/architecture.md) — module structure and data flow
 - [The Feedback Loop](docs/loop.md) — the full loop explained
 - [Snapshot Format](docs/snapshot-format.md) — `.bp.json` field contract
-- [CLI Reference](docs/cli-reference.md) — all `vigil` commands
-- [Release Checklist](RELEASE_CHECKLIST.md) — final pre-release verification steps
+- [CLI Reference](docs/cli.md) — all vigil commands
 - [Forensics](docs/forensics.md) — pattern library, log formats, evidence pack
-- [Integration Guide](docs/integration-guide.md) — Python API usage
+- [Integration Guide](docs/integration.md) — Python API usage
 - [Quickstart](docs/quickstart.md) — 10-minute walkthrough
 
-Framework examples:
+Framework examples: [examples/frameworks/](examples/frameworks/README.md)
 
-- [examples/frameworks/README.md](examples/frameworks/README.md)
+---
 
-## Related Tools
+## Free forensics audit
 
-- [BreakPoint](https://github.com/cholmess/breakpoint-ai) — catch regressions before you ship
-- [Canari](https://github.com/cholmess/canari) — detect attacks in real time
-- [Canari Forensics](https://github.com/cholmess/canari-forensics) — audit logs for past breaches
+Running an LLM application in production?
+
+We're offering free forensics audits for early design partners — scan your historical OTEL logs and find out if there are successful attacks you missed.
+
+What you get: a full evidence pack with every finding documented as a `.bp.json` snapshot, ready to commit as permanent CI gates.
+
+**[Open an issue](https://github.com/cholmess/vigil/issues)** or reach out directly:
+- X: [@cholmess](https://x.com/cholmess)
+- LinkedIn: [cholmess](https://linkedin.com/in/cholmess)
+
+---
 
 ## Maintainer
 
-Maintained by Christopher Holmes Silva.
-
-- X: https://x.com/cholmess
-- LinkedIn: https://linkedin.com/in/cholmess
+Maintained by [Christopher Holmes Silva](https://github.com/cholmess).
 
 Feedback is welcome from developers shipping LLM applications.
